@@ -9,7 +9,7 @@ def compVecs(v1, v2):
         assert len(v1) == len(v2)
         return [v1[i]/v2[i] for i in xrange(len(v1))]
 
-model = Model(fixedMu=True)
+model = Model()
 trueTheta = Theta.random(model)
 trueTheta.printVals()
 
@@ -33,7 +33,7 @@ for _ in xrange(9):
         print '*********'
         newTheta, Qmax = summ.maximizeQ()
         Qtrue = summ.Q(trueTheta)
-        print Qmax-Qtrue
+        print 'Qmax-Qtrue: ', Qmax-Qtrue
         newTheta.printVals()
         
         print 'Relative fit:'

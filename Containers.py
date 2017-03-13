@@ -187,7 +187,6 @@ class Theta(HmmTheta):
         if not model.fixedLambda:
             lambdaV = [defVals.lmb]
             for i in xrange(index, index + model.segments.n - 1):
-                print vec[i]
                 lambdaV.append(math.exp(vec[i]))
             index  += (model.segments.n - 1)
         

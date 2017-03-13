@@ -118,25 +118,44 @@ class HiddenSeqSummary(object):
         
         # in our case (the model constrains the matrices & initial distribution), we need to numerically find a (hopefully global) maximum
         else:
-            defVals = Theta(self._model).toUnconstrainedVec()
-            x0 = [-random.expovariate(2) for _ in xrange(self._model.nFreeParams)]
-            fun = lambda x: -self.Q(Theta.fromUnconstrainedVec(self._model, x))
-            
-            consts = [{'type': 'ineq', 'fun': lambda x:  math.log(10) + (x[i] - defVals[i])} for i in range(len(defVals))] \
-                    +[{'type': 'ineq', 'fun': lambda x:  math.log(10) - (x[i] - defVals[i])} for i in range(len(defVals))]
-            print defVals        
-            op = minimize(fun,
-                          x0,
-                          constraints=tuple(consts),
-                          tol=1e-40,
-                          options={'disp': True, 'maxiter': 1000000}
-                          )
-            
-            print 'opt: ', op.message
-            # TODO print op.success
-            
-            thetaRes = Theta.fromUnconstrainedVec(self._model, op.x)
+            maxFound = -np.inf
+            for _ in xrange(10):
+                defVals = Theta(self._model).toUnconstrainedVec()
+                x0 = Theta.random(self._model).toUnconstrainedVec()
+                
+                # TODO REMOVE OR DOC
+                # fun = lambda x: -self.Q(Theta.fromUnconstrainedVec(self._model, x))
+                
+                # TODO REMOVE OR DOC
+                QNull = self.Q(Theta(self._model))*2
+                logTen = math.log(10)
+                def fun(x):
+                    for i in xrange(self._model.nFreeParams):
+                        z = abs(x[i] - defVals[i])
+                        if z >= logTen:
+                            return -QNull
+                    return -self.Q(Theta.fromUnconstrainedVec(self._model, x))
+                
+                consts = [{'type': 'ineq', 'fun': lambda x:  math.log(10) + (x[i] - defVals[i])} for i in range(len(defVals))] \
+                        +[{'type': 'ineq', 'fun': lambda x:  math.log(10) - (x[i] - defVals[i])} for i in range(len(defVals))]
+                
+                op = minimize(fun,
+                              x0,
+                              #constraints=tuple(consts),
+                              tol=1e-7,
+                              #options={'disp': True, 'maxiter': 1000000}
+                              options={'maxiter': 1000000}
+                              )
+                
+                # print 'opt: ', op.message
+                
+                # TODO print op.success
+                
+                thetaRes = Theta.fromUnconstrainedVec(self._model, op.x)
+                if self.Q(thetaRes) > maxFound:
+                    maxFound = self.Q(thetaRes)
+                    maxTheta = thetaRes
         
-        return thetaRes, self.Q(thetaRes)
+        return maxTheta, maxFound
         
    
