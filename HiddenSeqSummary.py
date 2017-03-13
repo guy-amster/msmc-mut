@@ -4,101 +4,8 @@ import numpy as np
 from scipy.optimize import basinhopping, minimize
 from TransitionProbs import TransitionProbs
 from EmissionProbs import EmissionProbs
-from Containers import FreeParams
-from collections import namedtuple
-from SiteTypes import siteTypes
+from Containers import FreeParams, HmmTheta
 
-
-# This class holds an observed sequence 
-class ObservedSequence(object):
-
-    # chrLength : Chromosome length in base-pairs.
-    # segSites  : A sorted list of the (0-based) positions of segregating sites.    
-    def __init__(self, chrLength, segSites):
-        
-        # assert segSites list is valid
-        assert segSites[0] >= 0
-        for i in xrange(1, len(segSites)):
-            assert segSites[i-1] < segSites[i]
-        assert segSites[-1] < chrLength
-        
-        # chromosome length
-        self.length = chrLength
-        assert chrLength > 1
-        assert chrLength < (2**32)
-        
-        # TODO optimize size for performance
-        self.maxDistance = 1000
-        
-        # self.positions is a sorted list of positions such that:
-        #                 - It includes all segregating (het) sites.
-        #                 - The maximum distance between adjacent positions is self.maxWindowSize.
-        #                 - It includes the rightmost & leftmost positions.
-        # self.posTypes describes the corresponding types of self.positions
-        
-        # first, calcualte the required arrays length
-        # add 0 to the array
-        pos, n = 0, 1
-        for nextSeg in segSites:
-            # add all (non-zero) segregating sites
-            if nextSeg > 0:
-                # if distance is too large, add hom. positions
-                while (pos + self.maxDistance) < nextSeg:
-                    n   += 1
-                    pos += self.maxDistance
-                n   += 1
-                pos  = nextSeg
-        # add hom. positions until end of sequence is reached
-        while pos < (self.length - 1):
-            pos = min(pos + self.maxDistance, self.length - 1)
-            n+= 1
-        
-        # initilize arrays
-        self.positions = np.empty(n, dtype=np.uint32)
-        self.posTypes  = np.empty(n, dtype=np.uint8 )
-        
-        # fill arrays
-        # add 0 to the array
-        self.positions[0] = 0
-        self.posTypes[0]  = siteTypes.het if (0 in segSites) else siteTypes.hom
-        pos, i = 0, 1
-        
-        for nextSeg in segSites:
-            # add all (non-zero) segregating sites
-            if nextSeg > 0:
-                # if distance is too large, add hom. positions
-                while (pos + self.maxDistance) < nextSeg:
-                    pos               += self.maxDistance
-                    self.positions[i]  = pos
-                    self.posTypes[i]   = siteTypes.hom
-                    i                 += 1
-                # add next seg. site
-                pos  = nextSeg
-                self.positions[i]  = pos
-                self.posTypes[i]   = siteTypes.het
-                i                 += 1
-        # add hom. positions until end of sequence is reached
-        while pos < (self.length - 1):
-            pos = min(pos + self.maxDistance, self.length - 1)
-            self.positions[i] = pos
-            self.posTypes[i]  = siteTypes.hom
-            i                += 1
-        assert i == n
-        self.nPositions = n
-        
-        # update self.maxDistance (in case this specific sequence never reach the maximum distance)
-        self.maxDistance = 0
-        for i in xrange(self.nPositions - 1):
-            self.maxDistance = max(self.maxDistance, self.positions[i+1]-self.positions[i])
-            
-    # read sequence from file
-    @classmethod
-    def fromFilename(cls, filename):
-        # TODO fill details
-        return cls(self, chrLength, segSites)
-        
-        
-        
 
 # Summary statistics (NOT entire sequence) on hidden-state sequence
 # seqLength     : Underlying suequence length.
@@ -115,15 +22,19 @@ class HiddenSeqSummary(object):
         self.length = seqLength
         
         assert transitions.shape == (model.nStates, model.nStates)
-        assert emissions.shape   == (model.nStates, 2)
+        assert emissions.shape   == (model.nStates, model.nEmissions)
         assert gamma0.shape      == (model.nStates, )
         
         # TODO REMOVE float64 from project
         assert transitions.dtype == 'float64'
         assert emissions.dtype   == 'float64'
         
-        # TODO REMOVE AFTER SANITY CHECK!
+        # log( P(O|theta) ), where theta are the parameters used for the hidden-state inference
+        # (ie, theta are the parameters used for the Baum-Welch expectation step)
         self.logL = logLikelihood
+        
+        # number of observed sequences (e.g. different chromosomes) being summarized
+        self.nSequences = 1
         
         #TODO how to add these?
         self.gamma0 = gamma0
@@ -155,63 +66,84 @@ class HiddenSeqSummary(object):
         assert self.transitions.shape == other.transitions.shape
         assert self.emissions.shape   == other.emissions.shape
         
-        l1, l2 = float(self.length), float(other.length)
-        w1     = l1/(l1+l2)
-        w2     = 1.0 - w1
-        transitions = (w1 * self.transitions) + (w2 * other.transitions)
-        emissions   = (w1 * self.emissions  ) + (w2 * other.emissions  )
+        l1, l2          = float(self.length), float(other.length)
+        w1              = l1/(l1+l2)
+        w2              = 1.0 - w1
+        transitions     = (w1 * self.transitions) + (w2 * other.transitions)
+        emissions       = (w1 * self.emissions  ) + (w2 * other.emissions  )
+        logL            = self.logL + other.logL
         
-        res         = HiddenSeqSummary(self._model, self.length + other.length, transitions, emissions)
+        res             = HiddenSeqSummary(self._model, self.length + other.length, transitions, emissions, todogamma, logL)
+        res.nSequences  = self.nSequences + other.nSequences 
         return res
     
-    # Return a set of parameters theta that maximizes the log-likelihood of a specifiv hidden-states sequence (i.e. Baum-Welch maximization step with MSMC-like model).
-    def maximizeLogLikelihood(self):
-        freeParams = FreeParams(self._model)
-        defVals = freeParams.defVals()
-        x0 = [-random.expovariate(2) for _ in xrange(freeParams.nFreeParams)]
-        fun = lambda x: -self.logLikelihood(freeParams.theta(x))
+    # calculate Q(theta* | Q) (ie evaluation for EM maximization step)
+    # where theta are the parameters that were used for the creation of this HiddenSeqSummary class
+    # Q = E( log( P(hidden-state sequence Z, observations O | theta* ) ) ), where
+    #     the expactation is over the posterior distribution of Z conditioned on theta (ie ~ P(Z | O, theta) )
+    # This is all just standard EM stuff.
+    # TODO doc is this Q per-bp? what have I done?
+    def Q(self, thetaStar):
         
-        consts = [{'type': 'ineq', 'fun': lambda x:  math.log(10) + (x[i] - defVals[i])} for i in range(len(defVals))] \
-                +[{'type': 'ineq', 'fun': lambda x:  math.log(10) - (x[i] - defVals[i])} for i in range(len(defVals))]
-                
-        op = minimize(fun,
-                      x0,
-                      constraints=tuple(consts),
-                      tol=1e-40,
-                      options={'disp': True, 'maxiter': 1000000}
-                      )
+        # standard HMM 
+        if self._model.modelType == 'basic':
+            initialDist, transitionMat = thetaStar.chainDist  ()
+            emissionMat                = thetaStar.emissionMat()
+            res  = (self.length - 1)  * np.sum(np.log(transitionMat) * self.transitions)
+            res += self.length        * np.sum(np.log(emissionMat  ) * self.emissions  )
+            res +=                      np.sum(np.log(initialDist  ) * self.gamma0     )
+            return res
         
-        print 'opt: ', op.message
-        # TODO print op.success
+        # our model
+        # TODO benchmark to see if this is even faster than the general case above...
+        # if not: remove likelihoods from these classes; remove incfrom etc; remove this
+        else:
+            res  = EmissionProbs  (self._model, thetaStar).logLikelihood(self)
+            res += TransitionProbs(self._model, thetaStar).logLikelihood(self)
         
-        return freeParams.theta(op.x)
-    
-    # Calculate the average per-bp log-likelihood of the sequence, conditioned on the parameters defined by theta.
-    def logLikelihood(self, theta):
-        # TODO add gamma-0 here
-        res  = EmissionProbs(self._model, theta).logLikelihood(self)
-        res += TransitionProbs(self._model, theta).logLikelihood(self)
+            return res
+
+    # calculate theta* that maximizes Q (ie EM maximization step).
+    # returns theta* and the attained maximum value.
+    def maximizeQ(self):
         
-        return res
-    
-    # BW maximization step without model (ie no constraints on the trans\emiss matrix or initial dist.)
-    def maximizeLogLikelihood_noModel(self):
-        trans = np.empty( (self._model.nStates, self._model.nStates) )
-        for i in xrange(self._model.nStates):
-            trans[i,:] = self.transitions[i, :] / np.sum(self.transitions[i, :])
+        # in the case of a standard HMM, it's not necessary to evaluate Q, as there's a closed form global maximum
+        if self._model.modelType == 'basic':
+            trans = np.empty( (self._model.nStates, self._model.nStates) )
+            for i in xrange(self._model.nStates):
+                trans[i,:] = self.transitions[i, :] / np.sum(self.transitions[i, :])
         
-        emiss = np.empty( (self._model.nStates, self._model.nEmissions) )
-        for i in xrange(self._model.nStates):
-            emiss[i,:] = self.emissions[i, :] / np.sum(self.emissions[i, :])
+            emiss = np.empty( (self._model.nStates, self._model.nEmissions) )
+            for i in xrange(self._model.nStates):
+                emiss[i,:] = self.emissions[i, :] / np.sum(self.emissions[i, :])
+            
+            thetaRes = HmmTheta(self._model, trans, self.gamma0, emiss)
+
         
-        return trans, emiss, self.gamma0
-    
-    # loglikelihood of the (hidden + observed) sequence, without specific model (ie no constraints on the trans\emiss matrix or initial dist.)
-    def logLikelihood_noModel(self, transitionMat, emissionMat, iDist):
-        res  = (self.length - 1) * np.sum(np.log(transitionMat) * self.transitions)
-        res += self.length       * np.sum(np.log(emissionMat  ) * self.emissions  )
-        res += self.gamma0 * np.log(iDist)
-        return res
+        # in our case (the model constraints the matrices & initial distribution), we need to numerically find a local (hopefully global) maximum
+        else:
+            freeParams = FreeParams(self._model)
+            defVals = freeParams.defVals()
+            x0 = [-random.expovariate(2) for _ in xrange(freeParams.nFreeParams)]
+            fun = lambda x: -self.logLikelihood(freeParams.theta(x))
+            
+            consts = [{'type': 'ineq', 'fun': lambda x:  math.log(10) + (x[i] - defVals[i])} for i in range(len(defVals))] \
+                    +[{'type': 'ineq', 'fun': lambda x:  math.log(10) - (x[i] - defVals[i])} for i in range(len(defVals))]
+                    
+            op = minimize(fun,
+                          x0,
+                          constraints=tuple(consts),
+                          tol=1e-40,
+                          options={'disp': True, 'maxiter': 1000000}
+                          )
+            
+            print 'opt: ', op.message
+            # TODO print op.success
+            
+            thetaRes = freeParams.theta(op.x)
+        
+        return thetaRes, self.Q(thetaRes)
+        
         
 '''
 # bounds for optimization

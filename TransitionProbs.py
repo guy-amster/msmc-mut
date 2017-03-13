@@ -1,21 +1,15 @@
 import numpy as np
 import math
-from Containers import Model, Theta
-
-####### APPROXIMATION DOES NOT WORK.
+import scipy.integrate as integrate
 
 # TODO replace all asserts with assertTrue etc
-
-# TODO consider removing the class and make this file a module with one public function, returning a Matrix 
 
 # transitionProbs: This class calculates the transition probabilities of the model.
 class TransitionProbs(object):
     
     def __init__(self, model, theta):
         
-        # TODO save only something
         self._model = model
-        # TODO save only lambda
         self._theta = theta
         
         # Notations:
@@ -32,6 +26,7 @@ class TransitionProbs(object):
         self._calcIncTo()
         self._calcDecTo()
         self._calcDiagonal()
+        self._calcStationary()
     
     # Return the transition probability from state origin to state target.
     def transitionProb(self, origin, target):
@@ -46,23 +41,39 @@ class TransitionProbs(object):
         assert res <= 0.0
         return math.exp(res)
     
-    # Calculate the empirical log-likelihood of an observed sequence.
-    # observed is a Containers.SequenceSummary class
-    def logLikelihood(self, observed):
+    # return a matrix with the transition probabilities
+    def transitionMat(self):
+        
+        res = np.zeros( (self._model.nStates, self._model.nStates) )
+        
+        for i in xrange(self._model.nStates):
+            for j in xrange(self._model.nStates):
+                res[i,j] = self.transitionProb(i, j)
+        
+        return res
+    
+    # return a vector with the stationary distribution
+    def stationaryProb(self):
+        
+        return np.copy(self._stationaryProb)
+    
+    # Calculate the empirical log-likelihood of a specific hidden sequence (excluding emissions)
+    # seq is a HiddenSeqSummary instance
+    def logLikelihood(self, seq):
         
         res = 0.0
         
         # likelihood for loops
         for i in xrange(self._model.nStates):
-            res += observed.loops[i]*self._diagonal[i]
+            res += seq.transitions[i,i]*self._diagonal[i]
         
         for i in xrange(self._model.nStates - 1):
-            res += observed.incFrom[i]*self._IncFrom[i]
-            res += observed.decTo[i]*self._DecTo[i]
+            res += seq.incFrom[i] * self._IncFrom[i]
+            res += seq.decTo[i]   * self._DecTo[i]
         
         for i in xrange(1, self._model.nStates):
-            res += observed.incTo[i]*self._IncTo[i]
-            res += observed.decFrom[i]*self._DecFrom[i]
+            res += seq.incTo[i]   * self._IncTo[i]
+            res += seq.decFrom[i] * self._DecFrom[i]
         
         return res            
         
@@ -87,7 +98,15 @@ class TransitionProbs(object):
         
         self._DecFrom = dict()
         for i in xrange(1,self._model.nStates):                                   
-            self._DecFrom[i] = math.log(self._theta.r)
+            t1 = (self._theta.lambdaV[i]
+                  /-math.expm1(-self._theta.lambdaV[i]*self._model.segments.delta[i])
+                 )
+            t2 = self._g(self._theta.lambdaV[i],
+                         self._theta.r,
+                         self._model.segments.boundaries[i],
+                         self._model.segments.boundaries[i+1])
+            
+            self._DecFrom[i] = math.log(t1) + math.log(t2) + math.log(0.5)
             
     # calculate the coefficients DecTo (see constructor comments regarding notations)
     def _calcDecTo(self):
@@ -109,7 +128,7 @@ class TransitionProbs(object):
         self._IncTo = dict()
         for j in xrange(1,self._model.nStates):
             t = -math.expm1(-self._theta.lambdaV[j]*self._model.segments.delta[j])
-            self._IncTo[j] = self._logL(0,j) + math.log(t) + math.log(self._theta.r)
+            self._IncTo[j] = self._logL(0,j) + math.log(t)
     
     # calculate the coefficients DecTo (see constructor comments regarding notations)
     def _calcIncFrom(self):
@@ -118,15 +137,21 @@ class TransitionProbs(object):
         
         for i in xrange(self._model.nStates-1):
             
-            t1 = -math.expm1(-self._theta.lambdaV[i]*self._model.segments.delta[i])
-                 
-            t2 = self._S[i] - 0.5/self._theta.lambdaV[i]
-            t2 *= -math.expm1(-2.0
-                               *self._theta.lambdaV[i]
-                               *self._model.segments.delta[i])
-            t2 += self._model.segments.delta[i] 
+            t1 = (self._theta.lambdaV[i]
+                  /-math.expm1(-self._theta.lambdaV[i]*self._model.segments.delta[i])
+                 )
             
-            self._IncFrom[i] =  math.log(t2) - self._logL(0,i) - math.log(t1)
+            t2  = self._S[i]
+            t2 *= self._g(2.0*self._theta.lambdaV[i],
+                          self._theta.r,
+                          self._model.segments.boundaries[i],
+                          self._model.segments.boundaries[i+1])
+            t2 += self._gStar(2*self._theta.lambdaV[i],
+                              self._theta.r,
+                              self._model.segments.boundaries[i],
+                              self._model.segments.boundaries[i+1])
+            
+            self._IncFrom[i] = math.log(t1) + math.log(t2) - self._logL(0,i)
     
     # calculate log(p_ii) by completion to 1 (that is 1 - sum_(j != i)p_ij )
     def _calcDiagonal(self):
@@ -150,7 +175,6 @@ class TransitionProbs(object):
                    -math.exp(self._IncFrom[i])*marginalInc[i]
                    -math.exp(self._DecFrom[i])*marginalDec[i]
                   )
-            print res
             self._diagonal[i] = math.log(res)
         i = self._model.nStates - 1
         self._diagonal[i] = math.log(1.0 - math.exp(self._DecFrom[i])*marginalDec[i])
@@ -170,8 +194,60 @@ class TransitionProbs(object):
         # sanity check: assert log(p_ii) <= 0
         for i in xrange(self._model.nStates):
             assert self._diagonal[i] <= 0.0
+    
+    # calculates stationary distribution
+    def _calcStationary(self):
+        
+        self._stationaryProb = np.zeros( self._model.nStates )
+        
+        for i in xrange(self._model.nStates):
+            
+            p = self._L(0, i) * -math.expm1(-self._theta.lambdaV[i]*self._model.segments.delta[i])
+            self._stationaryProb[i] = p
+        
+        s = np.sum(self._stationaryProb)
+        # room for numerical error
+        assert abs(s - 1.0) < 10**-10
+        self._stationaryProb /= s
+        
 
-  
+    # Numerical approximation for g 
+    def _g(self, lmb, r, t1, t2):
+        
+        assert lmb > 0
+        assert r   > 0
+        assert t1  >= 0
+        assert t2  > t1
+        
+        res =  integrate.quad(lambda x: math.exp(-lmb*(x-t1))*-math.expm1(-2*r*x)/x,
+                              t1,
+                              t2,
+                              epsrel = 1.49e-7,
+                              epsabs = 0,
+                              limit  = 150)
+        
+        # TODO Make sure that integration error is under control
+        # assert res[1]/res[0] < .001
+        return res[0]
+    
+    # Numerical approximation for g* 
+    def _gStar(self, lmb, r, t1, t2):
+        
+        assert lmb > 0
+        assert r   > 0
+        assert t1  >= 0
+        assert t2  > t1
+        
+        res =  integrate.quad(lambda x: math.expm1(-lmb*(x-t1))*math.expm1(-2*r*x)/(lmb*x),
+                              t1,
+                              t2,
+                              epsrel = 1.49e-7,
+                              epsabs = 0,
+                              limit  = 150)
+        
+        # TODO Make sure that integration error is under control
+        # assert res[1]/res[0] < .001
+        return res[0]
     
     # return L*(T_i, T_j)
     def _lStar(self, i, j):
