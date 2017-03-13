@@ -4,7 +4,7 @@ import numpy as np
 from scipy.optimize import basinhopping, minimize
 from TransitionProbs import TransitionProbs
 from EmissionProbs import EmissionProbs
-from Containers import FreeParams, HmmTheta
+from Containers import Theta, HmmTheta
 
 
 # Summary statistics (NOT entire sequence) on hidden-state sequence
@@ -25,10 +25,6 @@ class HiddenSeqSummary(object):
         assert emissions.shape   == (model.nStates, model.nEmissions)
         assert gamma0.shape      == (model.nStates, )
         
-        # TODO REMOVE float64 from project
-        assert transitions.dtype == 'float64'
-        assert emissions.dtype   == 'float64'
-        
         # log( P(O|theta) ), where theta are the parameters used for the hidden-state inference
         # (ie, theta are the parameters used for the Baum-Welch expectation step)
         self.logL = logLikelihood
@@ -41,11 +37,11 @@ class HiddenSeqSummary(object):
         
         # emissions[i,j] is the  proportion of emissions i->j (i a state, j an observed output type)
         # i.e., the entire emissions matrix sums to 1
-        self.emissions   = emissions   / float(np.sum(emissions))
+        self.emissions   = emissions   #TODO REMOVE/ float(np.sum(emissions))
         
         # transitions[i,j] is the proportion of transitions i->j
         # i.e., the entire transitions matrix sums to 1
-        self.transitions = transitions / float(np.sum(transitions))
+        self.transitions = transitions #TODO REMOVE / float(np.sum(transitions))
         
         # IncFrom[i] is the proportion of transitions i->j for some j>i
         self.incFrom = np.array([np.sum(self.transitions[i,(i+1):]) for i in xrange(model.nStates)])
@@ -122,13 +118,13 @@ class HiddenSeqSummary(object):
         
         # in our case (the model constrains the matrices & initial distribution), we need to numerically find a (hopefully global) maximum
         else:
-            defVals = Theta().toUnconstrainedVec()
-            x0 = [-random.expovariate(2) for _ in xrange(model.nFreeParams)]
-            fun = lambda x: -self.logLikelihood(Theta.fromUnconstrainedVec(self._model, x))
+            defVals = Theta(self._model).toUnconstrainedVec()
+            x0 = [-random.expovariate(2) for _ in xrange(self._model.nFreeParams)]
+            fun = lambda x: -self.Q(Theta.fromUnconstrainedVec(self._model, x))
             
             consts = [{'type': 'ineq', 'fun': lambda x:  math.log(10) + (x[i] - defVals[i])} for i in range(len(defVals))] \
                     +[{'type': 'ineq', 'fun': lambda x:  math.log(10) - (x[i] - defVals[i])} for i in range(len(defVals))]
-                    
+            print defVals        
             op = minimize(fun,
                           x0,
                           constraints=tuple(consts),

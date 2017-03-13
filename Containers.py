@@ -78,10 +78,10 @@ class Model(HmmModel):
             self.nFreeParams += 1
         if not fixedLambda:
             # TODO lambda[0] is always constant
-            self.nFreeParams += (model.segments.n - 1)
+            self.nFreeParams += (self.segments.n - 1)
         if not fixedMu:
             # TODO u[0] is always constant
-            self.nFreeParams += (model.segments.n - 1)
+            self.nFreeParams += (self.segments.n - 1)
 
 # HmmTheta: a container class for the non-fixed parameters of an HmmModel.
 class HmmTheta(object):
@@ -158,7 +158,7 @@ class Theta(HmmTheta):
     # return the emission probabilities matrix.
     def emissionMat(self):
         
-        return EmissionProbs(self._model,self)._emissionMat()
+        return EmissionProbs(self._model,self).emissionMat()
     
     # return the initial distribution of the chain, and the transition probabilities matrix.
     def chainDist(self):
@@ -187,15 +187,16 @@ class Theta(HmmTheta):
         if not model.fixedLambda:
             lambdaV = [defVals.lmb]
             for i in xrange(index, index + model.segments.n - 1):
+                print vec[i]
                 lambdaV.append(math.exp(vec[i]))
             index  += (model.segments.n - 1)
         
         # read u
-        if not model.fixedU:
+        if not model.fixedMu:
             uV = [defVals.u]
             for i in xrange(index, index + model.segments.n - 1):
                 uV.append(math.exp(vec[i]))
-                index += (model.segments.n - 1)
+            index += (model.segments.n - 1)
         
         assert index == len(vec)
                                 
@@ -208,11 +209,11 @@ class Theta(HmmTheta):
         if not self._model.fixedR:
             res.append(math.log(self.r))
         
-        if not self._fixedLambda:
+        if not self._model.fixedLambda:
             for i in xrange(1,len(self.lambdaV)):
                 res.append(math.log(self.lambdaV[i]))
         
-        if not self._fixedMu:
+        if not self._model.fixedMu:
             for i in xrange(1,len(self.uV)):
                 res.append(math.log(self.uV[i]))
         
@@ -223,18 +224,24 @@ class Theta(HmmTheta):
     # Initialize theta with random values
     # TODO describe better as not all are random.
     @classmethod
-    def random(cls, model, fixedR=False, fixedLambda=False, fixedMu=False):    
-        self.r = defVals.r if fixedR else random.uniform(0.5*defVals.r, 2*defVals.r)
+    def random(cls, model):
         
-        lambdaV = [defVals.lmb]
-        for i in xrange(1,model.segments.n):
-            self.lambdaV.append(defVals.lmb if fixedLambda else random.uniform(0.125*defVals.lmb, 8*defVals.lmb))
+        r, lambdaV, uV  = None, None, None
         
-        self.uV = [defVals.u]
-        for i in xrange(1,model.segments.n):
-            self.uV.append(defVals.u if fixedMu else random.uniform(0.5*defVals.u, 2.0*defVals.u))
+        if not model.fixedR:
+            r = random.uniform(0.5*defVals.r, 2*defVals.r)
         
-        return cls(model, r, lambdaV, uV)
+        if not model.fixedLambda:
+            lambdaV = [defVals.lmb]
+            for i in xrange(1, model.segments.n):
+                lambdaV.append(random.uniform(0.125*defVals.lmb, 8*defVals.lmb))
+        
+        if not model.fixedMu:
+            uV = [defVals.u]
+            for i in xrange(1, model.segments.n):
+                uV.append(random.uniform(0.5*defVals.u, 2.0*defVals.u))
+        
+        return cls(model, r=r, lambdaV=lambdaV, uV=uV)
     
     # TODO Do I need this?
     def printVals(self):
