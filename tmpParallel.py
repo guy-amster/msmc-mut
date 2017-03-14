@@ -1,22 +1,38 @@
 from Containers import Model, Theta
-from ObservedSequence import ObservedSequence
 from BaumWelch import BaumWelch
+from BaumWelchExpectation import BaumWelchExpectation
 import math
 import numpy as np
 import coalSim
+from multiprocessing import Pool
 
 
-filenames = ['/mnt/data/msmc-bs/const-no-bs/raw/muts' + str(i) + '.txt' for i in xrange(300)]
 
+model = Model()
+theta = Theta.random(model)
+
+L = 10**6
 observations = []
-for i in xrange(300):
-        observations.append(ObservedSequence.fromFile(filenames[i]))
+for _ in xrange(2):
+        _, obs = coalSim.sampleSequence(model,theta,L)
+        observations.append(obs)
 
-model = Model(fixedMu=True)        
+def calcExp(d):
+        return BaumWelchExpectation(d['model'], d['theta'], d['obs']).inferHiddenStates()
 
-thetaMax = BaumWelch(model, observations, 1, 20  )
+inp = [{'model':model, 'theta':theta, 'obs':obs} for obs in observations]
 
-thetaMax.printVals()
+p   = Pool(2)
+res = p.map(calcExp, inp)       
+p.close()
+
+exp0 = BaumWelchExpectation(model, theta, observations[0]).inferHiddenStates()
+exp1 = BaumWelchExpectation(model, theta, observations[1]).inferHiddenStates()
+
+print exp0.transitions - res[0].transitions
+print exp0.transitions
+print exp1.transitions - res[1].transitions
+
 
 '''
 k=6 

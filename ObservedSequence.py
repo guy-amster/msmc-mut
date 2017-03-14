@@ -105,7 +105,7 @@ class ObservedSequence(object):
             
     # read sequence from file
     @classmethod
-    def fromFilename(cls, filename):
+    def fromFile(cls, filename):
         
         # TODO elaborate on structure; specify 0 or 1 based positions; change format?
         pattern = re.compile(r"""
@@ -119,7 +119,7 @@ class ObservedSequence(object):
         
         chrName   = None
         positions = []
-        lastpPos  = -1
+        lastPos  = -1
         
         with open(filename) as f:
             for line in f:
@@ -141,10 +141,10 @@ class ObservedSequence(object):
                 else:
                     assert chrName == chrN
                 
-                assert pos - lastpPos >= called
+                assert pos - lastPos >= called
                 
                 # TODO handle missing sites....
-                assert pos - lastpPos == called
+                assert pos - lastPos == called
                 
                 if seq[0] != seq[1]:
                     # segregating site
@@ -153,8 +153,8 @@ class ObservedSequence(object):
                 # TODO last site must appear, or length be given...
                 
                 lastPos = pos
-        
-        return cls(len(positions), positions, [1 for _ in xrange(len(positions))], chrName)
+                
+        return cls(positions[-1]+1, positions, [1 for _ in xrange(len(positions))], chrName)
     
     # read sequence from complete list of observed emissions
     @classmethod

@@ -1,8 +1,11 @@
-from Containers import HmmModel, HmmTheta
+from Containers import HmmModel, HmmTheta, Theta
 import numpy as np
 from BaumWelchExpectation import BaumWelchExpectation
 from ObservedSequence import ObservedSequence
 import itertools
+import time # TODO REMOVE
+from multiprocessing import Pool
+
 
 def _distPermute(A1, A2, B1, B2):
         dist = np.inf
@@ -31,6 +34,23 @@ def _dist(theta1, theta2):
         res =  _distPermute(trans1, trans2, emiss1, emiss2)
         return res
 
+def _calcExp(d):
+        return BaumWelchExpectation(d['model'], d['theta'], d['obs']).inferHiddenStates()
+
+def _parallelExp(model, theta, observations, nPrc):
+        
+        
+        inp = [{'model':model, 'theta':theta, 'obs':obs} for obs in observations]
+        
+        p   = Pool(nPrc)
+        res = p.map(_calcExp, inp)       
+        p.close()
+        
+        resSum = res[0]
+        for i in xrange(1, len(res)):
+                resSum = resSum + res[i]
+        return resSum
+        
 # model         : a (derived) HmmModel class
 # observations  : a list of ObservedSequence objects
 # nProcesses    : number of processors to parallelize on.
@@ -40,28 +60,28 @@ def BaumWelch(model, observations, nProcesses, nIterations, trueTheta = None):
         
         # We can use at most one processor per sequence.
         nProcesses = min(nProcesses, len(observations))
-        
-        # TODO implement
-        nProcesses = 1
-        assert len(observations) == 1
-        
+                
         # initialize theta
         if model.modelType == 'basic':
-                theta = HmmTheta.randomize(model)
+                theta = HmmTheta.random(model)
         else:
-                theta =    Theta.randomize(model)
+                theta =    Theta.random(model)
                 
         # we expect the log likelihood at the next iteration to be higher than this        
         bound = -np.inf
         
         if trueTheta != None:
-                trueL = BaumWelchExpectation(model, trueTheta, observations[0]).inferHiddenStates().logL
+                trueL = _parallelExp(model, trueTheta, observations, nProcesses).logL
+                # TODO REMOVE trueL = BaumWelchExpectation(model, trueTheta, observations[0]).inferHiddenStates().logL
                 print 'log-likelihood under true theta: %f'%trueL
                 
         for iter in xrange(nIterations):
                 
                 # BW expectation step
-                exp = BaumWelchExpectation(model, theta, observations[0]).inferHiddenStates()
+                start = time.time()
+                exp  = _parallelExp(model, theta, observations, nProcesses)
+                # TODO REMOVE exp = BaumWelchExpectation(model, theta, observations[0]).inferHiddenStates()
+                print 'timing exp: ', (time.time() - start)
                 
                 # sanity check: log(O|theta) has increased as expected in the last iteration
                 if exp.logL < bound:
@@ -72,8 +92,10 @@ def BaumWelch(model, observations, nProcesses, nIterations, trueTheta = None):
                 
                 # print statistics for simulated data
                 if trueTheta != None:
-                        x = _dist(trueTheta, theta)
-                        print 'distance from true theta: ', x
+                        # TODO EITHER REMOVE OR MOVE DIST TO THETA CLASSES
+                        #x = _dist(trueTheta, theta)
+                        #print 'distance from true theta: ', x
+                        pass
                 
                 # sanity check (this is just Jensen's inequality... Q(theta | theta) = E( log(P(O,Z|theta) ) <= log( E(P(O,Z|theta)) ) = log( P(O|theta) ) 
                 if Qtheta > exp.logL:
@@ -81,7 +103,9 @@ def BaumWelch(model, observations, nProcesses, nIterations, trueTheta = None):
 
                 
                 # maximization step
+                start = time.time()
                 newTheta, Qmax = exp.maximizeQ()
+                print 'timing max: ', (time.time() - start)
                 
                 # sanity check: max_thetaStar Q(thetaStar | theta) >= Q(theta | theta)
                 qDiff = Qmax - Qtheta

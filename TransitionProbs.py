@@ -63,9 +63,9 @@ class TransitionProbs(object):
         
         res = 0.0
         
-        # likelihood for loops
         for i in xrange(self._model.nStates):
             res += seq.transitions[i,i]*self._diagonal[i]
+            res += seq.gamma0[i]*math.log(self._stationaryProb[i])
         
         for i in xrange(self._model.nStates - 1):
             res += seq.incFrom[i] * self._IncFrom[i]

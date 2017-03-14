@@ -9,8 +9,8 @@ from Containers import Theta, HmmTheta
 
 # Summary statistics (NOT entire sequence) on hidden-state sequence
 # seqLength     : Underlying suequence length.
-# transitions   : ndarray. transitions[i,j] is the proportion, or absolute number, of transitions i->j
-# emissions     : ndarray. emissions[i,j] is the proportion, or absolute number, of emissions i->j (where 0 stands for hom. and 1 for het)
+# transitions   : ndarray. transitions[i,j] is the inferred number of transitions i->j
+# emissions     : ndarray. emissions[i,j] is the inferred number of emissions i->j
 # logLikelihood : the log-l of the hidden & observed sequence.
 # gamma0        : the posterior distribution of states at the beginning of the sequence
 class HiddenSeqSummary(object):
@@ -29,19 +29,9 @@ class HiddenSeqSummary(object):
         # (ie, theta are the parameters used for the Baum-Welch expectation step)
         self.logL = logLikelihood
         
-        # number of observed sequences (e.g. different chromosomes) being summarized
-        self.nSequences = 1
-        
-        #TODO how to add these?
-        self.gamma0 = gamma0
-        
-        # emissions[i,j] is the  proportion of emissions i->j (i a state, j an observed output type)
-        # i.e., the entire emissions matrix sums to 1
-        self.emissions   = emissions   #TODO REMOVE/ float(np.sum(emissions))
-        
-        # transitions[i,j] is the proportion of transitions i->j
-        # i.e., the entire transitions matrix sums to 1
-        self.transitions = transitions #TODO REMOVE / float(np.sum(transitions))
+        self.gamma0      = gamma0
+        self.emissions   = emissions
+        self.transitions = transitions 
         
         # IncFrom[i] is the proportion of transitions i->j for some j>i
         self.incFrom = np.array([np.sum(self.transitions[i,(i+1):]) for i in xrange(model.nStates)])
@@ -55,23 +45,19 @@ class HiddenSeqSummary(object):
         #   DecTo[j] is the proportion of transitions i->j for some i>j
         self.decTo   = np.array([np.sum(self.transitions[(j+1):,j]) for j in xrange(model.nStates)])
             
-    # Weighted average of 2 classes, weighted by sequence length.
-    # (i.e., the transition and emission matrices in the sum is the proportion in the 2 sequences combined)
+    # Combine two classes to one
     def __add__(self, other):
         
         assert self.transitions.shape == other.transitions.shape
         assert self.emissions.shape   == other.emissions.shape
         
-        l1, l2          = float(self.length), float(other.length)
-        w1              = l1/(l1+l2)
-        w2              = 1.0 - w1
-        transitions     = (w1 * self.transitions) + (w2 * other.transitions)
-        emissions       = (w1 * self.emissions  ) + (w2 * other.emissions  )
-        logL            = self.logL + other.logL
+        length          = self.length      + other.length
+        transitions     = self.transitions + other.transitions
+        emissions       = self.emissions   + other.emissions
+        gammaa0         = self.gamma0      + other.gamma0
+        logL            = self.logL        + other.logL
         
-        res             = HiddenSeqSummary(self._model, self.length + other.length, transitions, emissions, todogamma, logL)
-        res.nSequences  = self.nSequences + other.nSequences 
-        return res
+        return HiddenSeqSummary(self._model, length, transitions, emissions, gammaa0, logL)
     
     # calculate Q(theta* | theta) (ie evaluation for EM maximization step)
     # where theta are the parameters that were used for the creation of this HiddenSeqSummary class
@@ -85,9 +71,9 @@ class HiddenSeqSummary(object):
         if self._model.modelType == 'basic':
             initialDist, transitionMat = thetaStar.chainDist  ()
             emissionMat                = thetaStar.emissionMat()
-            res  = (self.length - 1)  * np.sum(np.log(transitionMat) * self.transitions)
-            res += self.length        * np.sum(np.log(emissionMat  ) * self.emissions  )
-            res +=                      np.sum(np.log(initialDist  ) * self.gamma0     )
+            res  = np.sum(np.log(transitionMat) * self.transitions)
+            res += np.sum(np.log(emissionMat  ) * self.emissions  )
+            res += np.sum(np.log(initialDist  ) * self.gamma0     )
             return res
         
         # our model

@@ -123,9 +123,7 @@ class BaumWelchExpectation(object):
         gammaZero  = beta * self._alpha[0,:]
         gammaZero /= np.sum(gammaZero)
         resEmissions[:, self._obs.posTypes[0]] += gammaZero
-        
-        # TODO output gammaZero too, and add it to the likelihood (negligible but technically required!)
-        
+                
         # The following section of the code
         # (Specifically: windowH[0, d-1, :, :] /= mats[0, d-1, :, :])
         # assumes that the matrices mats[j,d-1,:,:] don't have zero entries.
