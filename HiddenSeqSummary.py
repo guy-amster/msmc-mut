@@ -5,7 +5,36 @@ from scipy.optimize import basinhopping, minimize
 from TransitionProbs import TransitionProbs
 from EmissionProbs import EmissionProbs
 from Containers import Theta, HmmTheta
+from multiprocessing import Pool
 
+# TODO DOC
+# defined at the module level to allow calling from pool map
+def _maxQSingleStartPoint(likeSelf):
+    defVals = Theta(likeSelf._model).toUnconstrainedVec()
+    x0 = Theta.random(likeSelf._model).toUnconstrainedVec()
+            
+    # TODO DOC
+    QNull = likeSelf.Q(Theta(likeSelf._model))*2
+    logTen = math.log(10)
+    def fun(x):
+        for i in xrange(likeSelf._model.nFreeParams):
+            z = abs(x[i] - defVals[i])
+            if z >= logTen:
+                return -QNull
+        return -likeSelf.Q(Theta.fromUnconstrainedVec(likeSelf._model, x))
+    
+    consts = [{'type': 'ineq', 'fun': lambda x:  math.log(10) + (x[i] - defVals[i])} for i in range(len(defVals))] \
+            +[{'type': 'ineq', 'fun': lambda x:  math.log(10) - (x[i] - defVals[i])} for i in range(len(defVals))]
+    
+    op = minimize(fun,
+                  x0,
+                  #constraints=tuple(consts),
+                  tol=1e-7,
+                  #options={'disp': True, 'maxiter': 1000000}
+                  options={'maxiter': 1000000}
+                  )
+    
+    return Theta.fromUnconstrainedVec(likeSelf._model, op.x)
 
 # Summary statistics (NOT entire sequence) on hidden-state sequence
 # seqLength     : Underlying suequence length.
@@ -84,10 +113,13 @@ class HiddenSeqSummary(object):
             res += TransitionProbs(self._model, thetaStar).logLikelihood(self)
         
             return res
-
+    
     # calculate theta* that maximizes Q (ie EM maximization step).
     # returns theta* and the attained maximum value.
-    def maximizeQ(self):
+    def maximizeQ(self, nProcesses = 1, nStartPoints = 10):
+        
+        # we might as well use all available resources
+        nStartPoints = max(nStartPoints, nProcesses)
         
         # in the case of a standard HMM, it's not necessary to evaluate Q, as there's a closed form global maximum
         if self._model.modelType == 'basic':
@@ -99,48 +131,20 @@ class HiddenSeqSummary(object):
             for i in xrange(self._model.nStates):
                 emiss[i,:] = self.emissions[i, :] / np.sum(self.emissions[i, :])
             
-            thetaRes = HmmTheta(self._model, trans, self.gamma0, emiss)
-
+            maxTheta = HmmTheta(self._model, trans, self.gamma0, emiss)
+            maxFound = self.Q(maxTheta)
         
         # in our case (the model constrains the matrices & initial distribution), we need to numerically find a (hopefully global) maximum
         else:
+            p   = Pool(nProcesses)
+            res = p.map(_maxQSingleStartPoint, [self for _ in xrange(nStartPoints)])       
+            p.close()
+            
             maxFound = -np.inf
-            for _ in xrange(10):
-                defVals = Theta(self._model).toUnconstrainedVec()
-                x0 = Theta.random(self._model).toUnconstrainedVec()
-                
-                # TODO REMOVE OR DOC
-                # fun = lambda x: -self.Q(Theta.fromUnconstrainedVec(self._model, x))
-                
-                # TODO REMOVE OR DOC
-                QNull = self.Q(Theta(self._model))*2
-                logTen = math.log(10)
-                def fun(x):
-                    for i in xrange(self._model.nFreeParams):
-                        z = abs(x[i] - defVals[i])
-                        if z >= logTen:
-                            return -QNull
-                    return -self.Q(Theta.fromUnconstrainedVec(self._model, x))
-                
-                consts = [{'type': 'ineq', 'fun': lambda x:  math.log(10) + (x[i] - defVals[i])} for i in range(len(defVals))] \
-                        +[{'type': 'ineq', 'fun': lambda x:  math.log(10) - (x[i] - defVals[i])} for i in range(len(defVals))]
-                
-                op = minimize(fun,
-                              x0,
-                              #constraints=tuple(consts),
-                              tol=1e-7,
-                              #options={'disp': True, 'maxiter': 1000000}
-                              options={'maxiter': 1000000}
-                              )
-                
-                # print 'opt: ', op.message
-                
-                # TODO print op.success
-                
-                thetaRes = Theta.fromUnconstrainedVec(self._model, op.x)
-                if self.Q(thetaRes) > maxFound:
-                    maxFound = self.Q(thetaRes)
-                    maxTheta = thetaRes
+            for theta in res:
+                if self.Q(theta) > maxFound:
+                    maxFound = self.Q(theta)
+                    maxTheta = theta
         
         return maxTheta, maxFound
         

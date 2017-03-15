@@ -9,12 +9,16 @@ import coalSim
 filenames = ['/mnt/data/msmc-bs/const-no-bs/raw/muts' + str(i) + '.txt' for i in xrange(300)]
 
 observations = []
+model = Model(fixedMu=True)
+theta = Theta(model)
+
 for i in xrange(300):
-        observations.append(ObservedSequence.fromFile(filenames[i]))
+        _, obs = coalSim.sampleSequence(model, theta, 10**7)
+        observations.append(obs)
+        # observations.append(ObservedSequence.fromFile(filenames[i]))
 
-model = Model(fixedMu=True)        
 
-thetaMax = BaumWelch(model, observations, 1, 20  )
+thetaMax = BaumWelch(model, observations, nProcesses=32, nIterations=20, trueTheta = theta, theta=theta  )
 
 thetaMax.printVals()
 
