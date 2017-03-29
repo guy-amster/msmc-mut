@@ -218,12 +218,12 @@ class TransitionProbs(object):
         assert r   > 0
         assert t1  >= 0
         assert t2  > t1
-        
+
         res =  integrate.quad(lambda x: math.exp(-lmb*(x-t1))*-math.expm1(-2*r*x)/x,
                               t1,
                               t2,
-                              epsrel = 1.49e-7,
-                              epsabs = 0,
+                              #epsrel = 1.49e-7,
+                              #epsabs = 0,
                               limit  = 150)
         
         # TODO Make sure that integration error is under control
@@ -237,12 +237,12 @@ class TransitionProbs(object):
         assert r   > 0
         assert t1  >= 0
         assert t2  > t1
-        
+
         res =  integrate.quad(lambda x: math.expm1(-lmb*(x-t1))*math.expm1(-2*r*x)/(lmb*x),
                               t1,
                               t2,
-                              epsrel = 1.49e-7,
-                              epsabs = 0,
+                              #epsrel = 1.49e-7,
+                              #epsabs = 0,
                               limit  = 150)
         
         # TODO Make sure that integration error is under control

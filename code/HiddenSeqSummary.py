@@ -9,23 +9,30 @@ from multiprocessing import Pool
 
 # TODO DOC
 # defined at the module level to allow calling from pool map
-def _maxQSingleStartPoint(likeSelf):
-    defVals = Theta(likeSelf._model).toUnconstrainedVec()
-    x0 = Theta.random(likeSelf._model).toUnconstrainedVec()
+def _maxQSingleStartPoint(inpDict):
+
+    hiddenSeqSum = inpDict['hiddenSeqSum']
+    x0           = inpDict['x0']
+    if x0 == None:
+        x0 = Theta.random(hiddenSeqSum._model).toUnconstrainedVec()
+        
+    
+    defVals = Theta(hiddenSeqSum._model).toUnconstrainedVec()
+    
             
     # TODO DOC
-    QNull = likeSelf.Q(Theta(likeSelf._model))*2
+    QNull = hiddenSeqSum.Q(Theta(hiddenSeqSum._model))*2
     logTen = math.log(10)
     def fun(x):
-        for i in xrange(likeSelf._model.nFreeParams):
+        for i in xrange(hiddenSeqSum._model.nFreeParams):
             z = abs(x[i] - defVals[i])
             if z >= logTen:
                 return -QNull
-        return -likeSelf.Q(Theta.fromUnconstrainedVec(likeSelf._model, x))
+        return -hiddenSeqSum.Q(Theta.fromUnconstrainedVec(hiddenSeqSum._model, x))
     
     consts = [{'type': 'ineq', 'fun': lambda x:  math.log(10) + (x[i] - defVals[i])} for i in range(len(defVals))] \
             +[{'type': 'ineq', 'fun': lambda x:  math.log(10) - (x[i] - defVals[i])} for i in range(len(defVals))]
-    
+
     op = minimize(fun,
                   x0,
                   #constraints=tuple(consts),
@@ -33,8 +40,8 @@ def _maxQSingleStartPoint(likeSelf):
                   #options={'disp': True, 'maxiter': 1000000}
                   options={'maxiter': 1000000}
                   )
-    
-    return Theta.fromUnconstrainedVec(likeSelf._model, op.x)
+
+    return Theta.fromUnconstrainedVec(hiddenSeqSum._model, op.x)
 
 # Summary statistics (NOT entire sequence) on hidden-state sequence
 # seqLength     : Underlying suequence length.
@@ -116,7 +123,7 @@ class HiddenSeqSummary(object):
     
     # calculate theta* that maximizes Q (ie EM maximization step).
     # returns theta* and the attained maximum value.
-    def maximizeQ(self, nProcesses = 1, nStartPoints = 10):
+    def maximizeQ(self, nProcesses = 1, nStartPoints = 120, initTheta = None):
         
         # we might as well use all available resources
         nStartPoints = max(nStartPoints, nProcesses)
@@ -136,9 +143,19 @@ class HiddenSeqSummary(object):
         
         # in our case (the model constrains the matrices & initial distribution), we need to numerically find a (hopefully global) maximum
         else:
-            p   = Pool(nProcesses)
-            res = p.map(_maxQSingleStartPoint, [self for _ in xrange(nStartPoints)])       
-            p.close()
+            inputs = [{'hiddenSeqSum': self, 'x0':None} for _ in xrange(nStartPoints)]
+            if initTheta != None:
+                inputs.append({'hiddenSeqSum': self, 'x0':initTheta.toUnconstrainedVec()})
+
+            if nProcesses > 1:
+                p   = Pool(nProcesses)
+                res = p.map(_maxQSingleStartPoint, inputs)       
+                p.close()
+            else:
+                res = []
+                for inp in inputs:
+                    res.append(_maxQSingleStartPoint(inp))
+                
             
             maxFound = -np.inf
             for theta in res:

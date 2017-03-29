@@ -17,21 +17,23 @@ class ObservedSequence(object):
         if seqName != None:
             self.seqName = seqName
         
-        # assert nonZeroPositions list is valid
-        assert len(nonZeroValues) == len(nonZeroPositions)
-        assert nonZeroPositions[0] >= 0
-        for i in xrange(1, len(nonZeroPositions)):
-            assert nonZeroPositions[i-1] < nonZeroPositions[i]
-        assert nonZeroPositions[-1] < seqLength
-        
         # sequence length
         self.length = seqLength
+        
         assert seqLength > 1
         # if larger positions are required, change uint32 type below...
         assert seqLength < (2**32)
         
-        # if more than 256 observation types are required, change uint8 type below...
-        assert max(nonZeroValues) <= 255
+        # assert nonZeroPositions list is valid
+        assert len(nonZeroValues) == len(nonZeroPositions)
+        if len(nonZeroPositions) > 0:
+            assert nonZeroPositions[0] >= 0
+            for i in xrange(1, len(nonZeroPositions)):
+                assert nonZeroPositions[i-1] < nonZeroPositions[i]
+            assert nonZeroPositions[-1] < seqLength   
+        
+            # if more than 256 observation types are required, change uint8 type below...
+            assert max(nonZeroValues) <= 255
         
         # TODO optimize size for performance
         self.maxDistance = 1000
@@ -58,7 +60,12 @@ class ObservedSequence(object):
             
             # add position 0 if it's value is 0
             # (otherwise, it's treated like any other non-zero position)
-            if nonZeroPositions[0] > 0:
+            addZero = False
+            if len(nonZeroPositions) == 0:
+                addZero = True
+            elif nonZeroPositions[0] > 0:
+                addZero = True
+            if addZero:
                 if not firstPass:
                     self.posTypes [0]  = 0
                     self.positions[0]  = 0
@@ -102,12 +109,14 @@ class ObservedSequence(object):
         self.maxDistance = 0
         for i in xrange(self.nPositions - 1):
             self.maxDistance = max(self.maxDistance, self.positions[i+1]-self.positions[i])
-            
+        
+        
     # read sequence from file
     @classmethod
     def fromFile(cls, filename):
         
-        # TODO elaborate on structure; specify 0 or 1 based positions; change format?
+        # TODO elaborate on structure;  0 based positions; change format?
+        # NOTICE last position must be given as input!
         pattern = re.compile(r"""
                                  ^
                                   (?P<chrN>\w+)\t        # Chromosome name
@@ -141,20 +150,20 @@ class ObservedSequence(object):
                 else:
                     assert chrName == chrN
                 
+                assert called        >= 1
                 assert pos - lastPos >= called
                 
                 # TODO handle missing sites....
                 assert pos - lastPos == called
                 
+                assert len(seq) == 2
                 if seq[0] != seq[1]:
                     # segregating site
                     positions.append(pos)
                 
-                # TODO last site must appear, or length be given...
-                
                 lastPos = pos
                 
-        return cls(positions[-1]+1, positions, [1 for _ in xrange(len(positions))], chrName)
+        return cls(lastPos+1, positions, [1 for _ in xrange(len(positions))], chrName)
     
     # read sequence from complete list of observed emissions
     @classmethod

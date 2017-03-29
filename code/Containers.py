@@ -4,18 +4,19 @@ import numpy as np
 from collections import namedtuple
 from TransitionProbs import TransitionProbs
 from EmissionProbs import EmissionProbs
+from Logger import log
 
 # default parameter values for r, u & lambda
 DefValues = namedtuple('DefValues', 'r u lmb')
-defVals   = DefValues(0.0005, 0.0005, 1.0)
 
 # piecewise: A container class specifying fixed parameters for a piecewise function on [0,infinity):
 #            The number of segments, their sizes and boundaries.
 #            The values of the function are not specified here.
 class piecewise(object):
     
+    # TODO don't take pi like that... 
     # n: number of segments.
-    def __init__(self, n):
+    def __init__(self, n, pi):
         
         # number of segments
         assert n > 0
@@ -23,7 +24,12 @@ class piecewise(object):
         
         # Segments boundaties
         # Default is based on logarithmic quantiles; e.g. -log(1-i/n) for i=0,...,n where log(0) defined as -inf
-        self.boundaries = [-math.log1p(-1.0*i/self.n) for i in xrange(self.n)] + [np.inf]
+        # self.boundaries = [-math.log1p(-1.0*i/self.n) for i in xrange(self.n)] + [np.inf]
+        self.boundaries  = [-0.5*pi*math.log1p(-1.0*i/40.0) for i in xrange(11)]
+        self.boundaries += [-0.5*pi*math.log1p(-1.0*i/40.0) for i in xrange(12,40,2)]
+        self.boundaries += [np.inf]
+        assert len(self.boundaries) == (n+1)
+        log('intervals: ' + ','.join([str(x) for x in self.boundaries]))
         
         # Size of segments (notice: last segment size is np.inf)
         self.delta = np.diff(self.boundaries)
@@ -58,12 +64,15 @@ class Model(HmmModel):
     # fixedLambda = true: assumes lambda(t) is a constant (independent of time).
     # fixedMu     = True: assumes u(t) is a constant (independent of time).
     # TODO constants values are specified in TODO.
-    def __init__(self, fixedR=False, fixedLambda=False, fixedMu=False):
+    # TODO fixed here should be expanded to assume specific cons. / assume unknown constant (no change with time)
+    # TODO also model could accept defVals as input....
+    # TODO don't take pi like that - that's weird
+    def __init__(self, pi, fixedR=True, fixedLambda=False, fixedMu=False):
         self.modelType  = 'full'
         
         # Fixed paramaters for the segments defining the discrete hmm states and underlying the piecewise functions lambda(t) & u(t).
         # TODO are the same segments really ideal for both the inference of u & lambda (in terms of power)?
-        self.segments   = piecewise(8)
+        self.segments   = piecewise(25, pi)
 
         self.nStates    = self.segments.n
         self.nEmissions = 2
@@ -77,11 +86,13 @@ class Model(HmmModel):
         if not fixedR:
             self.nFreeParams += 1
         if not fixedLambda:
-            # TODO lambda[0] is always constant
-            self.nFreeParams += (self.segments.n - 1)
+            self.nFreeParams += self.segments.n
         if not fixedMu:
-            # TODO u[0] is always constant
-            self.nFreeParams += (self.segments.n - 1)
+            self.nFreeParams += self.segments.n
+        
+        # TODO change vals - rho should be 1...
+        
+        self.defVals = DefValues(.25, 1.0, (2.0/pi))
 
 # HmmTheta: a container class for the non-fixed parameters of an HmmModel.
 class HmmTheta(object):
@@ -135,20 +146,20 @@ class Theta(HmmTheta):
         
         # Scaled recombination rate r.
         if r == None:
-            self.r = defVals.r
+            self.r = model.defVals.r
         else:
             self.r = r
         
         # Piecewise coalescense rates.
         if lambdaV == None:
-            self.lambdaV = [defVals.lmb for _ in xrange(model.segments.n)]
+            self.lambdaV = [model.defVals.lmb for _ in xrange(model.segments.n)]
         else:
             assert len(lambdaV) == model.segments.n
             self.lambdaV = lambdaV
         
         # Piecewise mutation rates.
         if uV == None:
-            self.uV = [defVals.u for _ in xrange(model.segments.n)]
+            self.uV = [model.defVals.u for _ in xrange(model.segments.n)]
         else:
             assert len(uV) == model.segments.n
             self.uV = uV
@@ -168,9 +179,8 @@ class Theta(HmmTheta):
 
     @classmethod
     # expand a vector of unconstrained parameters to a Theta instance.
-    # vec = log(r) || log(lambda_1), ..., log(lambda_n-1) || log(u_1), ..., log(u_n-1).
+    # vec = log(r) || log(lambda_0), ..., log(lambda_n-1) || log(u_0), ..., log(u_n-1).
     # entries that are fixed in the model are ommited from the vector.
-    # (Notice lambda_0 and u_0 are always constrained by the model).
     def fromUnconstrainedVec(cls, model, vec):
         
         assert len(vec) == model.nFreeParams
@@ -185,17 +195,17 @@ class Theta(HmmTheta):
         
         # read lambda
         if not model.fixedLambda:
-            lambdaV = [defVals.lmb]
-            for i in xrange(index, index + model.segments.n - 1):
+            lambdaV = []
+            for i in xrange(index, index + model.segments.n ):
                 lambdaV.append(math.exp(vec[i]))
-            index  += (model.segments.n - 1)
+            index  += model.segments.n
         
         # read u
         if not model.fixedMu:
-            uV = [defVals.u]
-            for i in xrange(index, index + model.segments.n - 1):
+            uV = []
+            for i in xrange(index, index + model.segments.n):
                 uV.append(math.exp(vec[i]))
-            index += (model.segments.n - 1)
+            index += model.segments.n
         
         assert index == len(vec)
                                 
@@ -209,11 +219,11 @@ class Theta(HmmTheta):
             res.append(math.log(self.r))
         
         if not self._model.fixedLambda:
-            for i in xrange(1,len(self.lambdaV)):
+            for i in xrange(0,len(self.lambdaV)):
                 res.append(math.log(self.lambdaV[i]))
         
         if not self._model.fixedMu:
-            for i in xrange(1,len(self.uV)):
+            for i in xrange(0,len(self.uV)):
                 res.append(math.log(self.uV[i]))
         
         assert len(res) == self._model.nFreeParams
@@ -228,17 +238,17 @@ class Theta(HmmTheta):
         r, lambdaV, uV  = None, None, None
         
         if not model.fixedR:
-            r = random.uniform(0.5*defVals.r, 2*defVals.r)
+            r = random.uniform(0.5*model.defVals.r, 2*model.defVals.r)
         
         if not model.fixedLambda:
-            lambdaV = [defVals.lmb]
+            lambdaV = [model.defVals.lmb]
             for i in xrange(1, model.segments.n):
-                lambdaV.append(random.uniform(0.125*defVals.lmb, 8*defVals.lmb))
+                lambdaV.append(random.uniform(0.125*model.defVals.lmb, 8*model.defVals.lmb))
         
         if not model.fixedMu:
-            uV = [defVals.u]
+            uV = [model.defVals.u]
             for i in xrange(1, model.segments.n):
-                uV.append(random.uniform(0.5*defVals.u, 2.0*defVals.u))
+                uV.append(random.uniform(0.5*model.defVals.u, 2.0*model.defVals.u))
         
         return cls(model, r=r, lambdaV=lambdaV, uV=uV)
     
