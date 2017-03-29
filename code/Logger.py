@@ -6,9 +6,7 @@ _path = ''
 _logFiles = dict()
 
 # set a default path for various log files
-def setLogPath(path):
-    if path[-1] != '/':
-        path = path + '/'
+def setLoggerPath(path):
     global _path
     _path = path
 

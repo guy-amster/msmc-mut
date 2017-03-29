@@ -62,8 +62,9 @@ def _logVals(i, theta, logL, QInit, QMax, gof):
         vals.append(theta.r)
         vals.append(','.join([str(x) for x in theta.uV]))
         vals += [logL, QInit, QMax]
-        if gof != None:
-                vals.append(gof.G(theta))
+        if gof is not None:
+                for c in gof:
+                        vals.append(c.G(theta))
         log('\t'.join([str(v) for v in vals]))
         
 # model         : a (derived) HmmModel class
@@ -72,8 +73,8 @@ def _logVals(i, theta, logL, QInit, QMax, gof):
 # nIterations   : number of BW iterations. # TODO is there's a standard stopping criteria?
 # trueTheta     : for simulated data (will be used for printing statistics)
 # theta         : a theta value to initiate the BW process from; default is to use a random theta.
-# l             : Paramter l for GOF statistic G_l. If none, GOF statistics are not calculated.
-def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta = None, theta = None, l = None):
+# gof           : List of paramters l for GOF statistics G_l. If none, GOF statistics are not calculated.
+def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta = None, theta = None, gof = None):
         
                         
         # initialize theta
@@ -86,17 +87,17 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
                 
         # we expect the log likelihood at the next iteration to be higher than this        
         bound = -np.inf
-        
-        if l!= None:
-                gof = GOF(model, observations, l)
-        else:
-                gof = None
-        
+                
         # log column names.
         colNames = ['iter', 'lambda', 'r', 'u', 'logL', 'Q-Init', 'Q-Max']
-        if l!= None:
-                colNames.append('G%d'%l)
+        if gof is not None:
+                for l in gof:
+                        colNames.append('G%d'%l)
         log('\t'.join(colNames))
+        
+        if gof is not None:
+                gof = [GOF(model, observations, l) for l in gof]
+
         
         if trueTheta != None:
                 trueL = _parallelExp(model, trueTheta, observations, nProcesses).logL
@@ -154,4 +155,5 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
         _logVals(nIterations, theta, '.', '.', '.', gof)
         
         return theta
+                
                 
