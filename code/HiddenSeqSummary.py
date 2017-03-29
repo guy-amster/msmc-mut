@@ -1,7 +1,7 @@
 import random
 import math
 import numpy as np
-from scipy.optimize import basinhopping, minimize
+from scipy.optimize import minimize
 from TransitionProbs import TransitionProbs
 from EmissionProbs import EmissionProbs
 from Containers import Theta, HmmTheta
@@ -13,7 +13,7 @@ def _maxQSingleStartPoint(inpDict):
 
     hiddenSeqSum = inpDict['hiddenSeqSum']
     x0           = inpDict['x0']
-    if x0 == None:
+    if x0 is None:
         x0 = Theta.random(hiddenSeqSum._model).toUnconstrainedVec()
         
     
@@ -144,7 +144,7 @@ class HiddenSeqSummary(object):
         # in our case (the model constrains the matrices & initial distribution), we need to numerically find a (hopefully global) maximum
         else:
             inputs = [{'hiddenSeqSum': self, 'x0':None} for _ in xrange(nStartPoints)]
-            if initTheta != None:
+            if initTheta is not None:
                 inputs.append({'hiddenSeqSum': self, 'x0':initTheta.toUnconstrainedVec()})
 
             if nProcesses > 1:

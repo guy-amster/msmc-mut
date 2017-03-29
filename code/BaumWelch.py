@@ -78,7 +78,7 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
         
                         
         # initialize theta
-        if theta == None:
+        if theta is None:
                 if model.modelType == 'basic':
                         theta = HmmTheta.random(model)
                 else:
@@ -99,7 +99,7 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
                 gof = [GOF(model, observations, l) for l in gof]
 
         
-        if trueTheta != None:
+        if trueTheta is not None:
                 trueL = _parallelExp(model, trueTheta, observations, nProcesses).logL
                 
                 # log True theta vals
@@ -117,7 +117,7 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
                         logError('WARNING **** BW error 1 %f %f'%(exp.logL, bound))
                 
                 # print statistics for simulated data
-                if trueTheta != None:
+                if trueTheta is not None:
                         # TODO EITHER REMOVE OR MOVE DIST TO THETA CLASSES
                         #x = _dist(trueTheta, theta)
                         #print 'distance from true theta: ', x
@@ -140,7 +140,7 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
                 # (this is the inequality you get in the standard proof showing EM converges to a local maximum)
                 bound = exp.logL + qDiff
                 
-                if trueTheta != None:
+                if trueTheta is not None:
                         QTrue = exp.Q(trueTheta)
                         if QTrue > Qmax:
                                 logError('WARNING **** BW error 4 %f %f'%(exp.Q(trueTheta), Qmax))

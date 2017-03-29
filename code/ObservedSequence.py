@@ -14,7 +14,7 @@ class ObservedSequence(object):
     # nonZeroValues    : A list of the emitted observations in the positions described by nonZeroPositions.
     def __init__(self, seqLength, nonZeroPositions, nonZeroValues, seqName = None):
         
-        if seqName != None:
+        if seqName is not None:
             self.seqName = seqName
         
         # sequence length
@@ -136,7 +136,7 @@ class ObservedSequence(object):
                 match = pattern.match(line)
                 
                 # verify valid line structure
-                assert match != None
+                assert match is not None
                 
                 chrN   =     match.group("chrN"  )
                 pos    = int(match.group("pos"   ))
@@ -144,7 +144,7 @@ class ObservedSequence(object):
                 seq    =     match.group("seq"   )
                 
                 # read chr name from first line
-                if chrName == None:
+                if chrName is None:
                     chrName = chrN
                 # verify that all other lines refer to the same chromosome
                 else:

@@ -145,20 +145,20 @@ class Theta(HmmTheta):
     def __init__(self, model, r=None, lambdaV=None, uV=None):
         
         # Scaled recombination rate r.
-        if r == None:
+        if r is None:
             self.r = model.defVals.r
         else:
             self.r = r
         
         # Piecewise coalescense rates.
-        if lambdaV == None:
+        if lambdaV is None:
             self.lambdaV = [model.defVals.lmb for _ in xrange(model.segments.n)]
         else:
             assert len(lambdaV) == model.segments.n
             self.lambdaV = lambdaV
         
         # Piecewise mutation rates.
-        if uV == None:
+        if uV is None:
             self.uV = [model.defVals.u for _ in xrange(model.segments.n)]
         else:
             assert len(uV) == model.segments.n
