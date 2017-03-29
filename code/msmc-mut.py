@@ -1,15 +1,11 @@
-# from Containers import Model, Theta
-# from ObservedSequence import ObservedSequence
-# from BaumWelch import BaumWelch
-# from GOF import GOF
+from Containers import Model
+from ObservedSequence import ObservedSequence
+from BaumWelch import BaumWelch
 from Logger import log, logError, setLoggerPath
-# import math
-# import numpy as np
-# import coalSim
-# import os
-# import fnmatch
+import numpy as np 
+import os
+import fnmatch
 import argparse
-import sys
 import multiprocessing
 
 # specify flags & usage
@@ -44,6 +40,8 @@ setLoggerPath(args.o)
 files = []
 for inpPattern in args.input:
         pathName   = os.path.dirname(inpPattern)
+        if pathName == '':
+                pathName = os.curdir
         for f in os.listdir(pathName):
                 if fnmatch.fnmatch(f, os.path.basename(inpPattern)):
                         files.append(pathName + '/' + f)
@@ -59,7 +57,7 @@ def calcPi(observations):
         # TODO support missing sites, different site types etc
         for obs in observations:
                 length += obs.length
-                het    += np.count_nonzero(obs.posTypes)
+                het    += np.count_nonzero(obs.posTypes) # remove np import
         pi = float(het)/float(length)
         return pi
 
