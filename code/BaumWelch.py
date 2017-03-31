@@ -64,8 +64,10 @@ def _logVals(i, theta, logL, QInit, QMax, gof):
         vals.append(','.join([str(x) for x in theta.uV]))
         vals += [logL, QInit, QMax]
         if gof is not None:
+                start = time.time()
                 for c in gof:
                         vals.append(c.G(theta))
+                log('calculated gof statistics within %f seconds'%(time.time()-start))
         log('\t'.join([str(v) for v in vals]), filename='loop')
         
 # model         : a (derived) HmmModel class
@@ -97,7 +99,9 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
         log('\t'.join(colNames), filename = 'loop')
         
         if gof is not None:
+                start = time.time()
                 gof = [GOF(model, observations, l) for l in gof]
+                log('initialized gof statistics within %f seconds'%(time.time()-start))
 
         
         if trueTheta is not None:

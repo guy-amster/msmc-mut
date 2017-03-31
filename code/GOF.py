@@ -59,7 +59,7 @@ class GOF(object):
                 
         # normalize H to distribution (i.e. to sum to one)
         s = float(sum(H.values()))
-        self._pObs = defaultdict(float)
+        self._pObs = dict()
         for k in H.keys():
             self._pObs[k] = float(H[k]) / s
         
@@ -69,10 +69,11 @@ class GOF(object):
     def G(self, theta):
         
         M, Md2 = (2**self._l), (2**(self._l-1))
-        res    = 0.0
+        res, sObs    = 0.0 ,0.0
 
         # calculate expected distribution of l-sequences under theta
-        for n in xrange(M):
+        # first for sequences that were actually observed
+        for n in self._pObs.keys():
             
             # break n into a binary sequence (where the first element id the MSB)
             seq = []
@@ -88,8 +89,14 @@ class GOF(object):
             seq = ObservedSequence.fromEmissionsList(seq)
             
             # get the log-likelihood of the sequence given theta
-            estP = math.exp(BaumWelchExpectation(self._model, theta, seq).inferHiddenStates().logL)
+            estP  = math.exp(BaumWelchExpectation(self._model, theta, seq).inferHiddenStates().logL)
+            sObs += estP 
             
+            # update total-variance distance
             res += ( 0.5 * abs(estP - self._pObs[n]) )
+            
+        # update total-variance distance for unobserved sequences
+        assert (sObs <= 1.0)
+        res += 0.5 *(1.0 - sObs)
         
         return res
