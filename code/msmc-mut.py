@@ -4,6 +4,7 @@ from BaumWelch import BaumWelch
 from Logger import log, logError, setLoggerPath
 import numpy as np 
 import os
+import sys
 import fnmatch
 import argparse
 import multiprocessing
@@ -24,17 +25,18 @@ parser.add_argument('-par', metavar = ('nProcesses'), type=int, default=multipro
 parser.add_argument('input', metavar = ('inputFile'), nargs='+', 
                    help='Input files. Supports Unix filename pattern matching (eg, chr*.txt or inputfiles/chr*.txt ).')
 
-
 # read input flags
 args = parser.parse_args()
 assert args.iter > 0
 assert args.par  > 0
 if args.gof is not None:
         assert min(args.gof) > 0
-# TODO log entire command line
 
 # set logger path
 setLoggerPath(args.o)
+
+# log command line
+log(" ".join(sys.argv))
 
 # read input dir & match all input files...
 files = []
@@ -48,8 +50,11 @@ for inpPattern in args.input:
 
 
 observations = [ObservedSequence.fromFile(f) for f in files]
-# TODO log 'read X files (names)'
+
+log('read %d input files (%s)'%(len(files), ','.join(files)))
 # TODO handle exceptions well, path doesn't exist or file doesn't exist
+
+log('BW steps will be spanned over %d processes'%args.par)
 
 # TODO move somewhere
 def calcPi(observations):

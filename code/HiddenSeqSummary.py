@@ -6,6 +6,7 @@ from TransitionProbs import TransitionProbs
 from EmissionProbs import EmissionProbs
 from Containers import Theta, HmmTheta
 from multiprocessing import Pool
+from Logger import log
 
 # TODO DOC
 # defined at the module level to allow calling from pool map
@@ -123,7 +124,7 @@ class HiddenSeqSummary(object):
     
     # calculate theta* that maximizes Q (ie EM maximization step).
     # returns theta* and the attained maximum value.
-    def maximizeQ(self, nProcesses = 1, nStartPoints = 120, initTheta = None):
+    def maximizeQ(self, nProcesses = 1, nStartPoints = 290, initTheta = None):
         
         # we might as well use all available resources
         nStartPoints = max(nStartPoints, nProcesses)
@@ -145,7 +146,7 @@ class HiddenSeqSummary(object):
         else:
             inputs = [{'hiddenSeqSum': self, 'x0':None} for _ in xrange(nStartPoints)]
             if initTheta is not None:
-                inputs.append({'hiddenSeqSum': self, 'x0':initTheta.toUnconstrainedVec()})
+                inputs = [{'hiddenSeqSum': self, 'x0':initTheta.toUnconstrainedVec()}] + inputs
 
             if nProcesses > 1:
                 p   = Pool(nProcesses)
@@ -158,10 +159,16 @@ class HiddenSeqSummary(object):
                 
             
             maxFound = -np.inf
-            for theta in res:
-                if self.Q(theta) > maxFound:
-                    maxFound = self.Q(theta)
+            maxIndex = []
+            for i in xrange(len(res)): # TODO return to for theta in res
+                theta = res[i]
+                val = self.Q(theta)
+                if val > maxFound:
+                    maxFound = val
                     maxTheta = theta
+                    maxIndex.append(str(i))
+            
+            log('max-indices: ' + ','.join(maxIndex), filename = 'DBG')
         
         return maxTheta, maxFound
         

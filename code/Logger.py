@@ -1,5 +1,6 @@
 import atexit
 import sys
+import os
 
 _path = ''
 
@@ -10,14 +11,35 @@ def setLoggerPath(path):
     global _path
     _path = path
 
+# TODO add locks :(
 # write line to aprropriate log-file (opening it first if hadn't already)
 def log(line, filename = 'log'):
-    if filename not in _logFiles:
-        _logFiles[filename] = open(_path + filename + '.txt', 'w')
-    _logFiles[filename].write(line + '\n')
     
+    line = line + '\n'
+    
+    # if first use of this file, open it first 
+    if filename not in _logFiles:
+        
+        # if a file with this name already exists, issue warning
+        fullPath = _path + filename + '.txt'
+        if os.path.exists(fullPath):
+            warningMsg = 'File %s exists; previous version is being deleted.'%fullPath
+            if filename == 'errorLog':
+                line = line + warningMsg
+            else:
+                log(warningMsg, filename = 'errorLog')
+        
+        # open file (deleting existing copy if necessary)
+        _logFiles[filename] = open(fullPath, 'w')
+    
+    # write line to file
+    _logFiles[filename].write(line)
+    
+    # special file streams (log \ error) are also printed to scrren
     if filename == 'errorLog':
-        sys.stderr.write(line + '\n')
+        sys.stderr.write(line)
+    elif filename == 'log':
+        sys.stdout.write(line)
 
 def logError(line):
     log(line, filename='errorLog')

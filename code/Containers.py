@@ -29,7 +29,7 @@ class piecewise(object):
         self.boundaries += [-0.5*pi*math.log1p(-1.0*i/40.0) for i in xrange(12,40,2)]
         self.boundaries += [np.inf]
         assert len(self.boundaries) == (n+1)
-        log('intervals: ' + ','.join([str(x) for x in self.boundaries]))
+        log('intervals: ' + ','.join([str(x) for x in self.boundaries]), filename='loop')
         
         # Size of segments (notice: last segment size is np.inf)
         self.delta = np.diff(self.boundaries)

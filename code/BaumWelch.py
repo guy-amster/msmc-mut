@@ -1,8 +1,9 @@
-from Containers import HmmModel, HmmTheta, Theta
+import itertools # TODO remove
+import time
 import numpy as np
+from Containers import HmmModel, HmmTheta, Theta
 from BaumWelchExpectation import BaumWelchExpectation
 from ObservedSequence import ObservedSequence
-import itertools
 from multiprocessing import Pool
 from Logger import log, logError
 from GOF import GOF
@@ -65,7 +66,7 @@ def _logVals(i, theta, logL, QInit, QMax, gof):
         if gof is not None:
                 for c in gof:
                         vals.append(c.G(theta))
-        log('\t'.join([str(v) for v in vals]))
+        log('\t'.join([str(v) for v in vals]), filename='loop')
         
 # model         : a (derived) HmmModel class
 # observations  : a list of ObservedSequence objects
@@ -93,7 +94,7 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
         if gof is not None:
                 for l in gof:
                         colNames.append('G%d'%l)
-        log('\t'.join(colNames))
+        log('\t'.join(colNames), filename = 'loop')
         
         if gof is not None:
                 gof = [GOF(model, observations, l) for l in gof]
@@ -107,10 +108,12 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
                 
         for i in xrange(nIterations):
                 
-                print 'starting BW iteration number %d\n'%(i + 1)
+                log('starting BW iteration number %d'%(i + 1))
                 
                 # BW expectation step
+                start = time.time()
                 exp  = _parallelExp(model, theta, observations, nProcesses)
+                log('finshed BW exp step within %f seconds'%(time.time()-start))
                 
                 # sanity check: log(O|theta) has increased as expected in the last iteration
                 if exp.logL < bound:
@@ -129,7 +132,9 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
                         logError('WARNING **** BW error 2 %f %f'%(Qtheta, exp.logL))
 
                 # maximization step
+                start = time.time()
                 newTheta, Qmax = exp.maximizeQ(nProcesses = nProcesses, initTheta = theta)
+                log('finshed BW max step within %f seconds'%(time.time()-start))
 
                 # sanity check: max_thetaStar Q(thetaStar | theta) >= Q(theta | theta)
                 qDiff = Qmax - Qtheta
