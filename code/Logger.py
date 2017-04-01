@@ -32,14 +32,19 @@ def log(line, filename = 'log'):
         # open file (deleting existing copy if necessary)
         _logFiles[filename] = open(fullPath, 'w')
     
-    # write line to file
-    _logFiles[filename].write(line)
+    # write line to file & flush immediately
+    f = _logFiles[filename]
+    f.write(line)
+    f.flush()
+    os.fsync(f.fileno())
     
     # special file streams (log \ error) are also printed to scrren
     if filename == 'errorLog':
         sys.stderr.write(line)
+        sys.stderr.flush()
     elif filename == 'log':
         sys.stdout.write(line)
+        sys.stdout.flush()
 
 def logError(line):
     log(line, filename='errorLog')

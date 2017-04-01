@@ -1,48 +1,14 @@
 import random
 import math
 import numpy as np
+from functools import partial
 from scipy.optimize import minimize
 from TransitionProbs import TransitionProbs
 from EmissionProbs import EmissionProbs
 from Containers import Theta, HmmTheta
-from multiprocessing import Pool
+from Parallel import runParallel, runMemberFunc
 from Logger import log
 
-# TODO DOC
-# defined at the module level to allow calling from pool map
-def _maxQSingleStartPoint(inpDict):
-
-    hiddenSeqSum = inpDict['hiddenSeqSum']
-    x0           = inpDict['x0']
-    if x0 is None:
-        x0 = Theta.random(hiddenSeqSum._model).toUnconstrainedVec()
-        
-    
-    defVals = Theta(hiddenSeqSum._model).toUnconstrainedVec()
-    
-            
-    # TODO DOC
-    QNull = hiddenSeqSum.Q(Theta(hiddenSeqSum._model))*2
-    logTen = math.log(10)
-    def fun(x):
-        for i in xrange(hiddenSeqSum._model.nFreeParams):
-            z = abs(x[i] - defVals[i])
-            if z >= logTen:
-                return -QNull
-        return -hiddenSeqSum.Q(Theta.fromUnconstrainedVec(hiddenSeqSum._model, x))
-    
-    consts = [{'type': 'ineq', 'fun': lambda x:  math.log(10) + (x[i] - defVals[i])} for i in range(len(defVals))] \
-            +[{'type': 'ineq', 'fun': lambda x:  math.log(10) - (x[i] - defVals[i])} for i in range(len(defVals))]
-
-    op = minimize(fun,
-                  x0,
-                  #constraints=tuple(consts),
-                  tol=1e-7,
-                  #options={'disp': True, 'maxiter': 1000000}
-                  options={'maxiter': 1000000}
-                  )
-
-    return Theta.fromUnconstrainedVec(hiddenSeqSum._model, op.x)
 
 # Summary statistics (NOT entire sequence) on hidden-state sequence
 # seqLength     : Underlying suequence length.
@@ -101,7 +67,6 @@ class HiddenSeqSummary(object):
     # Q = E( log( P(hidden-state sequence Z, observations O | theta* ) ) ), where
     #     the expactation is over the posterior distribution of Z conditioned on theta (ie ~ P(Z | O, theta) )
     # This is all just standard EM stuff.
-    # TODO doc is this Q per-bp? what have I done?
     def Q(self, thetaStar):
         
         # standard HMM 
@@ -121,6 +86,40 @@ class HiddenSeqSummary(object):
             res += TransitionProbs(self._model, thetaStar).logLikelihood(self)
         
             return res
+    
+    # Find theta* that maximizes Q(theta* | theta), initializing the maximization algorithm at theta* = theta0.
+    # If theta0 = None, initialize at random.
+    # Return (theta*, maxValue).
+    def _maxQSingleStartPoint(self, theta0 = None):
+    
+        if theta0 is None:
+            theta0 = Theta.random(self._model)
+        
+        x0 = theta0.toUnconstrainedVec()
+        defVals = Theta(self._model).toUnconstrainedVec()
+                
+        # TODO DOC
+        QNull = self.Q(Theta(self._model))*2
+        logTen = math.log(10)
+        def fun(x):
+            for i in xrange(self._model.nFreeParams):
+                z = abs(x[i] - defVals[i])
+                if z >= logTen:
+                    return -QNull
+            return -self.Q(Theta.fromUnconstrainedVec(self._model, x))
+        
+        consts = [{'type': 'ineq', 'fun': lambda x:  math.log(10) + (x[i] - defVals[i])} for i in range(len(defVals))] \
+                +[{'type': 'ineq', 'fun': lambda x:  math.log(10) - (x[i] - defVals[i])} for i in range(len(defVals))]
+        # TODO what algorithm?
+        op = minimize(fun,
+                      x0,
+                      #constraints=tuple(consts),
+                      tol=1e-7,
+                      options={'disp': True, 'maxiter': 1000000}
+                      #options={'maxiter': 1000000}
+                      )
+        
+        return (Theta.fromUnconstrainedVec(self._model, op.x), -op.fun)
     
     # calculate theta* that maximizes Q (ie EM maximization step).
     # returns theta* and the attained maximum value.
@@ -144,25 +143,17 @@ class HiddenSeqSummary(object):
         
         # in our case (the model constrains the matrices & initial distribution), we need to numerically find a (hopefully global) maximum
         else:
-            inputs = [{'hiddenSeqSum': self, 'x0':None} for _ in xrange(nStartPoints)]
-            if initTheta is not None:
-                inputs = [{'hiddenSeqSum': self, 'x0':initTheta.toUnconstrainedVec()}] + inputs
-
-            if nProcesses > 1:
-                p   = Pool(nProcesses)
-                res = p.map(_maxQSingleStartPoint, inputs)       
-                p.close()
-            else:
-                res = []
-                for inp in inputs:
-                    res.append(_maxQSingleStartPoint(inp))
-                
+            # initialize maximization at initTheta, null theta, and (nStartPoints - 2) random theta
+            inputs = [initTheta, Theta(self._model)] + [None for _ in xrange(nStartPoints - 2)]
             
+            # run self._maxQSingleStartPoint() on all items in inputs
+            # Note: using partial(runMemberFunc, ...) to overcome Pool.map limitations on class methods.
+            res = runParallel(partial(runMemberFunc, instance=self, memberName='_maxQSingleStartPoint'), inputs, nProcesses)
+                
             maxFound = -np.inf
             maxIndex = []
-            for i in xrange(len(res)): # TODO return to for theta in res
-                theta = res[i]
-                val = self.Q(theta)
+            for i in xrange(len(res)): # TODO return to for theta, val in res
+                theta, val = res[i]
                 if val > maxFound:
                     maxFound = val
                     maxTheta = theta

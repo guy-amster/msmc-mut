@@ -8,6 +8,7 @@ import sys
 import fnmatch
 import argparse
 import multiprocessing
+import time
 
 # specify flags & usage
 parser = argparse.ArgumentParser(description='Infer population size and mutation rate histories. \n ')
@@ -24,6 +25,9 @@ parser.add_argument('-par', metavar = ('nProcesses'), type=int, default=multipro
                    help='Number of processes to use (default: number of CPU\'s).')
 parser.add_argument('input', metavar = ('inputFile'), nargs='+', 
                    help='Input files. Supports Unix filename pattern matching (eg, chr*.txt or inputfiles/chr*.txt ).')
+
+# TODO make sure everuthing works with nPrc = 1
+# TODO define pool here / somewhere shared, to avoid recreating pool each time???
 
 # read input flags
 args = parser.parse_args()
@@ -66,9 +70,10 @@ def calcPi(observations):
         pi = float(het)/float(length)
         return pi
 
-assert args.fixedMu
-if args.fixedMu:
-        model = Model(calcPi(observations), fixedR=False, fixedLambda=False, fixedMu=True)
+start = time.time()
+
+model = Model(calcPi(observations), fixedR=(not args.fixedMu), fixedLambda=False, fixedMu=args.fixedMu)       
+BaumWelch(model, observations, nProcesses=args.par, nIterations=args.iter, gof=args.gof)
         
-        BaumWelch(model, observations, nProcesses=args.par, nIterations=args.iter, gof=args.gof)
+log('Done (overall execution time: %f minutes).'%((time.time()-start)/60))
 

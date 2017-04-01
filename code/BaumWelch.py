@@ -40,17 +40,14 @@ def _dist(theta1, theta2):
 def _calcExp(d):
         return BaumWelchExpectation(d['model'], d['theta'], d['obs']).inferHiddenStates()
 
+# TODO move to exp?
 def _parallelExp(model, theta, observations, nPrc):
         
-        if nPrc == 1:
-                res = [BaumWelchExpectation(model, theta, obs).inferHiddenStates() for obs in observations]
+        inp = [{'model':model, 'theta':theta, 'obs':obs} for obs in observations]
         
-        else:
-                inp = [{'model':model, 'theta':theta, 'obs':obs} for obs in observations]
-                
-                p   = Pool(nPrc)
-                res = p.map(_calcExp, inp)       
-                p.close()
+        p   = Pool(nPrc)
+        res = p.map(_calcExp, inp)       
+        p.close()
         
         resSum = res[0]
         for i in xrange(1, len(res)):
@@ -100,7 +97,7 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
         
         if gof is not None:
                 start = time.time()
-                gof = [GOF(model, observations, l) for l in gof]
+                gof = [GOF(model, observations, l, nProcesses) for l in gof]
                 log('initialized gof statistics within %f seconds'%(time.time()-start))
 
         

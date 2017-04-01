@@ -28,6 +28,9 @@ class piecewise(object):
         self.boundaries  = [-0.5*pi*math.log1p(-1.0*i/40.0) for i in xrange(11)]
         self.boundaries += [-0.5*pi*math.log1p(-1.0*i/40.0) for i in xrange(12,40,2)]
         self.boundaries += [np.inf]
+        # TODO REMOVE
+        self.boundaries = [0.0, 0.00002732, 0.00010245, 0.003415, np.inf] # mu
+        self.boundaries = [0.0, 0.00000452, 0.00001695, 0.000565, np.inf]
         assert len(self.boundaries) == (n+1)
         log('intervals: ' + ','.join([str(x) for x in self.boundaries]), filename='loop')
         
@@ -72,7 +75,8 @@ class Model(HmmModel):
         
         # Fixed paramaters for the segments defining the discrete hmm states and underlying the piecewise functions lambda(t) & u(t).
         # TODO are the same segments really ideal for both the inference of u & lambda (in terms of power)?
-        self.segments   = piecewise(25, pi)
+        # TODO replace 4 with 25
+        self.segments   = piecewise(4, pi)
 
         self.nStates    = self.segments.n
         self.nEmissions = 2
@@ -91,8 +95,10 @@ class Model(HmmModel):
             self.nFreeParams += self.segments.n
         
         # TODO change vals - rho should be 1...
-        
-        self.defVals = DefValues(.25, 1.0, (2.0/pi))
+        if fixedR:
+            self.defVals = DefValues(1.0, 4.0, (8.0/pi))
+        else:
+            self.defVals = DefValues(.25, 1.0, (2.0/pi))
 
 # HmmTheta: a container class for the non-fixed parameters of an HmmModel.
 class HmmTheta(object):
