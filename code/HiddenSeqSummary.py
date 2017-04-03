@@ -6,8 +6,7 @@ from scipy.optimize import minimize
 from TransitionProbs import TransitionProbs
 from EmissionProbs import EmissionProbs
 from Containers import Theta, HmmTheta
-from Parallel import runParallel, runMemberFunc
-from Logger import log
+from Parallel import runParallel, runMemberFunc, writeOutput
 
 
 # Summary statistics (NOT entire sequence) on hidden-state sequence
@@ -123,10 +122,7 @@ class HiddenSeqSummary(object):
     
     # calculate theta* that maximizes Q (ie EM maximization step).
     # returns theta* and the attained maximum value.
-    def maximizeQ(self, nProcesses = 1, nStartPoints = 290, initTheta = None):
-        
-        # we might as well use all available resources
-        nStartPoints = max(nStartPoints, nProcesses)
+    def maximizeQ(self, nStartPoints = 290, initTheta = None):
         
         # in the case of a standard HMM, it's not necessary to evaluate Q, as there's a closed form global maximum
         if self._model.modelType == 'basic':
@@ -148,7 +144,7 @@ class HiddenSeqSummary(object):
             
             # run self._maxQSingleStartPoint() on all items in inputs
             # Note: using partial(runMemberFunc, ...) to overcome Pool.map limitations on class methods.
-            res = runParallel(partial(runMemberFunc, instance=self, memberName='_maxQSingleStartPoint'), inputs, nProcesses)
+            res = runParallel(partial(runMemberFunc, instance=self, memberName='_maxQSingleStartPoint'), inputs)
                 
             maxFound = -np.inf
             maxIndex = []
@@ -159,7 +155,7 @@ class HiddenSeqSummary(object):
                     maxTheta = theta
                     maxIndex.append(str(i))
             
-            log('max-indices: ' + ','.join(maxIndex), filename = 'DBG')
+            writeOutput('max-indices: ' + ','.join(maxIndex), filename = 'Debug')
         
         return maxTheta, maxFound
         

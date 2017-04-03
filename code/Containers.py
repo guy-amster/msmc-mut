@@ -4,7 +4,7 @@ import numpy as np
 from collections import namedtuple
 from TransitionProbs import TransitionProbs
 from EmissionProbs import EmissionProbs
-from Logger import log
+from Parallel import writeOutput
 
 # default parameter values for r, u & lambda
 DefValues = namedtuple('DefValues', 'r u lmb')
@@ -32,7 +32,8 @@ class piecewise(object):
         self.boundaries = [0.0, 0.00002732, 0.00010245, 0.003415, np.inf] # mu
         self.boundaries = [0.0, 0.00000452, 0.00001695, 0.000565, np.inf]
         assert len(self.boundaries) == (n+1)
-        log('intervals: ' + ','.join([str(x) for x in self.boundaries]), filename='loop')
+        # TODO move this to BW.py so all outputs'll be written from there...
+        writeOutput('intervals: ' + ','.join([str(x) for x in self.boundaries]), 'loop')
         
         # Size of segments (notice: last segment size is np.inf)
         self.delta = np.diff(self.boundaries)

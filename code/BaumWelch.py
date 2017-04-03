@@ -4,9 +4,10 @@ import numpy as np
 from Containers import HmmModel, HmmTheta, Theta
 from BaumWelchExpectation import BaumWelchExpectation
 from ObservedSequence import ObservedSequence
-from multiprocessing import Pool
-from Logger import log, logError
+from Parallel import writeOutput, runParallel
 from GOF import GOF
+from functools import partial
+
 
 
 # TODO MOVE OR REMOVE
@@ -37,17 +38,12 @@ def _dist(theta1, theta2):
         res =  _distPermute(trans1, trans2, emiss1, emiss2)
         return res
 
-def _calcExp(d):
-        return BaumWelchExpectation(d['model'], d['theta'], d['obs']).inferHiddenStates()
+def _calcExp(obs, model, theta):
+        return BaumWelchExpectation(model, theta, obs).inferHiddenStates()
 
-# TODO move to exp?
-def _parallelExp(model, theta, observations, nPrc):
+def _parallelExp(model, theta, observations):
         
-        inp = [{'model':model, 'theta':theta, 'obs':obs} for obs in observations]
-        
-        p   = Pool(nPrc)
-        res = p.map(_calcExp, inp)       
-        p.close()
+        res = runParallel(partial(_calcExp, model=model, theta=theta), observations)
         
         resSum = res[0]
         for i in xrange(1, len(res)):
@@ -64,17 +60,16 @@ def _logVals(i, theta, logL, QInit, QMax, gof):
                 start = time.time()
                 for c in gof:
                         vals.append(c.G(theta))
-                log('calculated gof statistics within %f seconds'%(time.time()-start))
-        log('\t'.join([str(v) for v in vals]), filename='loop')
+                writeOutput('calculated gof statistics within %f seconds'%(time.time()-start))
+        writeOutput('\t'.join([str(v) for v in vals]), 'loop')
         
 # model         : a (derived) HmmModel class
 # observations  : a list of ObservedSequence objects
-# nProcesses    : number of processors to parallelize on.
 # nIterations   : number of BW iterations. # TODO is there's a standard stopping criteria?
 # trueTheta     : for simulated data (will be used for printing statistics)
 # theta         : a theta value to initiate the BW process from; default is to use a random theta.
 # gof           : List of paramters l for GOF statistics G_l. If none, GOF statistics are not calculated.
-def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta = None, theta = None, gof = None):
+def BaumWelch(model, observations, nIterations = 20, trueTheta = None, theta = None, gof = None):
         
                         
         # initialize theta
@@ -93,32 +88,32 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
         if gof is not None:
                 for l in gof:
                         colNames.append('G%d'%l)
-        log('\t'.join(colNames), filename = 'loop')
+        writeOutput('\t'.join(colNames), 'loop')
         
         if gof is not None:
                 start = time.time()
-                gof = [GOF(model, observations, l, nProcesses) for l in gof]
-                log('initialized gof statistics within %f seconds'%(time.time()-start))
+                gof = [GOF(model, observations, l) for l in gof]
+                writeOutput('initialized gof statistics within %f seconds'%(time.time()-start))
 
         
         if trueTheta is not None:
-                trueL = _parallelExp(model, trueTheta, observations, nProcesses).logL
+                trueL = _parallelExp(model, trueTheta, observations).logL
                 
                 # log True theta vals
                 _logVals('T', trueTheta, trueL, '.', '.', gof)
                 
         for i in xrange(nIterations):
                 
-                log('starting BW iteration number %d'%(i + 1))
+                writeOutput('starting BW iteration number %d'%(i + 1))
                 
                 # BW expectation step
                 start = time.time()
-                exp  = _parallelExp(model, theta, observations, nProcesses)
-                log('finshed BW exp step within %f seconds'%(time.time()-start))
+                exp  = _parallelExp(model, theta, observations)
+                writeOutput('finshed BW exp step within %f seconds'%(time.time()-start))
                 
                 # sanity check: log(O|theta) has increased as expected in the last iteration
                 if exp.logL < bound:
-                        logError('WARNING **** BW error 1 %f %f'%(exp.logL, bound))
+                        writeOutput('WARNING **** BW error 1 %f %f'%(exp.logL, bound), 'ErrorLog')
                 
                 # print statistics for simulated data
                 if trueTheta is not None:
@@ -130,17 +125,17 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
                 # sanity check (this is just Jensen's inequality... Q(theta | theta) = E( log(P(O,Z|theta) ) <= log( E(P(O,Z|theta)) ) = log( P(O|theta) ) 
                 Qtheta = exp.Q(theta)
                 if Qtheta > exp.logL:
-                        logError('WARNING **** BW error 2 %f %f'%(Qtheta, exp.logL))
+                        writeOutput('WARNING **** BW error 2 %f %f'%(Qtheta, exp.logL), 'ErrorLog')
 
                 # maximization step
                 start = time.time()
-                newTheta, Qmax = exp.maximizeQ(nProcesses = nProcesses, initTheta = theta)
-                log('finshed BW max step within %f seconds'%(time.time()-start))
+                newTheta, Qmax = exp.maximizeQ(initTheta = theta)
+                writeOutput('finshed BW max step within %f seconds'%(time.time()-start))
 
                 # sanity check: max_thetaStar Q(thetaStar | theta) >= Q(theta | theta)
                 qDiff = Qmax - Qtheta
                 if qDiff < 0:
-                        logError('WARNING **** BW error 3 %f %f'%(Qmax, Qtheta))
+                        writeOutput('WARNING **** BW error 3 %f %f'%(Qmax, Qtheta), 'ErrorLog')
         
                 # the log likelihood of newTheta should be higher by at least qDiff
                 # (this is the inequality you get in the standard proof showing EM converges to a local maximum)
@@ -149,7 +144,7 @@ def BaumWelch(model, observations, nProcesses = 1, nIterations = 20, trueTheta =
                 if trueTheta is not None:
                         QTrue = exp.Q(trueTheta)
                         if QTrue > Qmax:
-                                logError('WARNING **** BW error 4 %f %f'%(exp.Q(trueTheta), Qmax))
+                                writeOutput('WARNING **** BW error 4 %f %f'%(exp.Q(trueTheta), Qmax), 'ErrorLog')
                 
                 # log iteration
                 _logVals(i, theta, exp.logL, Qtheta, Qmax, gof)

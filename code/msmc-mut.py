@@ -1,7 +1,7 @@
 from Containers import Model
 from ObservedSequence import ObservedSequence
 from BaumWelch import BaumWelch
-from Logger import log, logError, setLoggerPath
+from Parallel import initParallel, runParallel, writeOutput
 import numpy as np 
 import os
 import sys
@@ -27,7 +27,6 @@ parser.add_argument('input', metavar = ('inputFile'), nargs='+',
                    help='Input files. Supports Unix filename pattern matching (eg, chr*.txt or inputfiles/chr*.txt ).')
 
 # TODO make sure everuthing works with nPrc = 1
-# TODO define pool here / somewhere shared, to avoid recreating pool each time???
 
 # read input flags
 args = parser.parse_args()
@@ -36,11 +35,11 @@ assert args.par  > 0
 if args.gof is not None:
         assert min(args.gof) > 0
 
-# set logger path
-setLoggerPath(args.o)
+# Init output-writer process and processes pool
+initParallel(args.par, args.o)
 
 # log command line
-log(" ".join(sys.argv))
+writeOutput(" ".join(sys.argv))
 
 # read input dir & match all input files...
 files = []
@@ -55,10 +54,10 @@ for inpPattern in args.input:
 
 observations = [ObservedSequence.fromFile(f) for f in files]
 
-log('read %d input files (%s)'%(len(files), ','.join(files)))
+writeOutput('read %d input files (%s)'%(len(files), ','.join(files)))
 # TODO handle exceptions well, path doesn't exist or file doesn't exist
 
-log('BW steps will be spanned over %d processes'%args.par)
+writeOutput('BW steps will be spanned over %d processes'%args.par)
 
 # TODO move somewhere
 def calcPi(observations):
@@ -73,7 +72,7 @@ def calcPi(observations):
 start = time.time()
 
 model = Model(calcPi(observations), fixedR=(not args.fixedMu), fixedLambda=False, fixedMu=args.fixedMu)       
-BaumWelch(model, observations, nProcesses=args.par, nIterations=args.iter, gof=args.gof)
+BaumWelch(model, observations, nIterations=args.iter, gof=args.gof)
         
-log('Done (overall execution time: %f minutes).'%((time.time()-start)/60))
+writeOutput('Done (overall execution time: %f minutes).'%((time.time()-start)/60))
 

@@ -43,16 +43,16 @@ def initParallel(nPrc, outputPrefix):
         # all processes set q at init
         global _p
         # TODO maxtasksperchild test
-        _p = mp.Pool(nPrc + 1, initilizer=_setQueue, initargs=(outputPrefix,))
+        _p = mp.Pool(nPrc + 1, initializer=_setQueue, initargs=(q,))
         
         # run output-writer process
-        pool.apply_async(_runOutputWriter,(outputPrefix,))
+        _p.apply_async(_runOutputWriter,(outputPrefix,))
         
         # shcedule cleanup of these resources when program is finished
         atexit.register(_atExit)
 
 # Write output messages to file.
-def writeOutput(line, filename = 'log'):
+def writeOutput(line, filename = 'Log'):
     
     if _nPrc == 1:
         _outputWriter.write(line, filename)
@@ -88,6 +88,7 @@ def _setQueue(q):
 def _runOutputWriter(outputPrefix):
     
     outputWriter = OutputWriter(outputPrefix)
+
     while True:
         mType, line, filename = _q.get()
         if mType == 'stop':
@@ -95,14 +96,13 @@ def _runOutputWriter(outputPrefix):
             break
         else:
             outputWriter.write(line, filename)
+            
     outputWriter.close()
 
 # Clean resources at exit
 def _atExit():
-    writeOutput('Exiting Parallel module', 'DBG')
 
-    # TODO Read queue docs
-    # order writer process to finish his task
+    # order writer process to finish its task
     _q.put(('stop',None,None))
     # order pool processes to terminate
     _p.close()
@@ -114,12 +114,9 @@ class OutputWriter(object):
     def __init__(self, outputPrefix):
         self._outputPrefix = outputPrefix
         self._files        = dict()
-        
-        # TODO REMOVE
-        sys.stdout.write('testOut')
-        sys.stderr.write('testErr')
     
-    def write(line, filename):
+    def write(self, line, filename):
+
         line = line + '\n'
     
         # if first use of this file, open it first 
@@ -128,18 +125,17 @@ class OutputWriter(object):
             # if a file with this name already exists, issue warning
             fullName = self._outputPrefix + filename + '.txt'
             if os.path.exists(fullName):
-                warningMsg = 'File %s exists; previous version is being deleted.'%fullPath
-                if filename == 'errorLog':
+                warningMsg = 'File %s exists; previous version is being deleted.'%fullName
+                if filename == 'ErrorLog':
                     line = line + warningMsg + '\n'
                 else:
-                    # TODO REPLACE ALL errorLog with ErrorLog
                     self.write(warningMsg, filename = 'ErrorLog')
             
             # open file (deleting existing copy if necessary)
-            _logFiles[filename] = open(fullName, 'w')
+            self._files[filename] = open(fullName, 'w')
         
         # write line to file & flush immediately
-        f = _logFiles[filename]
+        f = self._files[filename]
         f.write(line)
         f.flush()
         os.fsync(f.fileno())
@@ -152,7 +148,7 @@ class OutputWriter(object):
             sys.stdout.write(line)
             sys.stdout.flush()
 
-    def close():
+    def close(self):
         self.write('Closing output-writer', 'DBG')
-        for f in self._files:
+        for f in self._files.itervalues():
             f.close()

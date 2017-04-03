@@ -3,26 +3,20 @@ import math
 from collections import defaultdict
 from BaumWelchExpectation import BaumWelchExpectation
 from ObservedSequence import ObservedSequence
-from multiprocessing import Pool
-from Logger import log
+from Parallel import runParallel, writeOutput
+from functools import partial
 
 # Calculate the predicted probability of a specific subsequence seq given theta.
 # (Function defined at the module level to allow calling from pool map)
 # seq : ObservedSequence instance.
-def _calcPredictedProb(inpDict):
-    model = inpDict['model']
-    theta = inpDict['theta']
-    seq   = inpDict['seq']
+def _calcPredictedProb(seq, model, theta):
     return math.exp(BaumWelchExpectation(model, theta, seq).inferHiddenStates().logL)
-
 
 # Calculate the observed distribution of all length-l subsequences of an observed suquence.
 # (Function defined at the module level to allow calling from pool map)
 # l   : Subsequence-length.
 # obs : ObservedSequence instance.
-def _calcObservedDist(inpDict):
-    l   = inpDict['l']
-    obs = inpDict['obs']
+def _calcObservedDist(obs, l):
     
     # H - an histogram of l-sequences
     H = defaultdict(int)
@@ -78,10 +72,7 @@ class GOF(object):
         assert model.nEmissions == 2
         
         # calculate a histogram of observed sequences in parallel
-        inputs = [{'l': l, 'obs':obs} for obs in observations]
-        p   = Pool(nPrc)
-        res = p.map(_calcObservedDist, inputs)       
-        p.close()
+        res = runParallel(partial(_calcObservedDist, l=l), observations)
         
         # sum result histogram to one summary histogram H
         H = defaultdict(int)
@@ -116,17 +107,14 @@ class GOF(object):
             # represent n as an ObservedSequence object
             self._obsSequences.append(ObservedSequence.fromEmissionsList(seq))
                 
-        log('Input sequences contain %d distinct %d-sequences (used for GOF statistics)'%(len(self._obsProbs),l))
+        writeOutput('Input sequences contain %d distinct %d-sequences (used for GOF statistics)'%(len(self._obsProbs),l))
         
             
     # return the statistic G_l comparing GOF between theta and the observed value
     def G(self, theta):
         
         # calculate the predicted probabilities of the observed sequences
-        inputs    = [{'model': self._model, 'theta':theta, 'seq':seq} for seq in self._obsSequences]
-        p         = Pool(self._nPrc)
-        predProbs = p.map(_calcPredictedProb, inputs)       
-        p.close()
+        res = runParallel(partial(_calcObservedDist, model=self._model, theta=theta), self._obsSequences)
         
         # calulate total-variation distance TV between observed and predicted distr. of l-sequences:
         
