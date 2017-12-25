@@ -8,6 +8,8 @@ import atexit
 import multiprocessing as mp
 import sys
 import os
+import traceback
+from functools import partial
 
 # TODO migrate all pool calls to here.
             
@@ -54,11 +56,13 @@ def initParallel(nPrc, outputPrefix):
 # Write output messages to file.
 def writeOutput(line, filename = 'Log'):
     
+    originProcess = mp.current_process().name
+    
     if _nPrc == 1:
-        _outputWriter.write(line, filename)
+        _outputWriter.write(line, filename, originProcess)
     
     else:
-        _q.put(('msg', line, filename))
+        _q.put(('msg', line, filename, originProcess))
 
 # Calculate [f(inp) for inp in inputs] in parallel.
 def runParallel(f, inputs):
@@ -70,14 +74,33 @@ def runParallel(f, inputs):
         return [f(inp) for inp in inputs]
     
     else:
-        return _p.map(f, inputs)
+        # run _runAndCatch(f, inp) for inp in inputs;
+        # _runAndCatch(f, ) is just f with improved exception handling
+        return _p.map(partial(_runAndCatch,f), inputs)
 
-# Return instance.memberName(args0, *args);
+# Try & compute f(inp).
+# If an exception is raised, print it from within the working process.
+# (This function improves the poor builtin exception reporting of Pool.map)
+def _runAndCatch(f, inp):
+    try:
+        return f(inp)
+    except Exception as e:
+        
+        # print details
+        writeOutput(traceback.format_exc(), 'ErrorLog')
+        
+        # re-throw e
+        raise e
+    
+
+# Returns the function lambda x: instance.memberName(x);
 # Note: Pool.map() only allows calling pickable functions (ie defined at top module level).
 #       This function allows to overcome this and invoke Pool.map() on class functions.
-#       (Any changes made to the class by the child process are obviously lost).
-def runMemberFunc(arg0, instance, memberName, *args):
-    return getattr(instance, memberName)(arg0, *args)
+#       (Any changes made to the class by the child process are obviously lost, but return value is attained).
+def runMemberFunc(instance, memberName):
+    return partial(_runMemberFunc, instance, memberName)
+def _runMemberFunc(instance, memberName, arg0):
+    return getattr(instance, memberName)(arg0)
 
 # Sets queue q as global variable in this module.
 def _setQueue(q):
@@ -90,12 +113,12 @@ def _runOutputWriter(outputPrefix):
     outputWriter = OutputWriter(outputPrefix)
 
     while True:
-        mType, line, filename = _q.get()
+        mType, line, filename, originProcess = _q.get()
         if mType == 'stop':
             # TODO empty queue first???
             break
         else:
-            outputWriter.write(line, filename)
+            outputWriter.write(line, filename, originProcess)
             
     outputWriter.close()
 
@@ -103,7 +126,7 @@ def _runOutputWriter(outputPrefix):
 def _atExit():
 
     # order writer process to finish its task
-    _q.put(('stop',None,None))
+    _q.put(('stop',None,None,None))
     # order pool processes to terminate
     _p.close()
     # wait for pool processes to terminate
@@ -115,9 +138,13 @@ class OutputWriter(object):
         self._outputPrefix = outputPrefix
         self._files        = dict()
     
-    def write(self, line, filename):
-
-        line = line + '\n'
+    def write(self, line, filename, originProcess):
+        
+        if line[-1] != '\n':
+            line = line + '\n'
+        # add process ID to DBG prints:
+        if filename in ['DBG', 'ErrorLog']:
+            line = '(process %s) '%originProcess + line
     
         # if first use of this file, open it first 
         if filename not in self._files:
@@ -129,7 +156,7 @@ class OutputWriter(object):
                 if filename == 'ErrorLog':
                     line = line + warningMsg + '\n'
                 else:
-                    self.write(warningMsg, filename = 'ErrorLog')
+                    writeOutput(warningMsg, filename = 'ErrorLog')
             
             # open file (deleting existing copy if necessary)
             self._files[filename] = open(fullName, 'w')
@@ -140,15 +167,15 @@ class OutputWriter(object):
         f.flush()
         os.fsync(f.fileno())
         
-        # special file streams (log \ error) are also printed to scrren
+        # special file streams (log \ error) are also printed to stdout \ stderr
         if filename == 'ErrorLog':
             sys.stderr.write(line)
             sys.stderr.flush()
-        elif filename == 'log':
+        elif filename == 'Log':
             sys.stdout.write(line)
             sys.stdout.flush()
 
     def close(self):
-        self.write('Closing output-writer', 'DBG')
+        writeOutput('Closing output-writer', 'DBG')
         for f in self._files.itervalues():
             f.close()

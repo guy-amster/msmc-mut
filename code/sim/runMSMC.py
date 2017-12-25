@@ -31,7 +31,7 @@ inputFilenames = []
 if inPath[-1] != '/':
     inPath += '/'
 for f in os.listdir(inPath):
-    if fnmatch.fnmatch(f, 'muts*.txt'):
+    if fnmatch.fnmatch(f, 'muts*.msmc'):
         inputFilenames.append(inPath + f)
 
 # read output directory path
@@ -40,20 +40,20 @@ if outPath[-1] != '/':
     outPath += '/'
 
 # run msmc
-msmcCmd = ['/mnt/data/msmc/build/msmc']
+msmcCmd = ['/mnt/data/soft/msmc/build/msmc']
 
 msmcOut  = outPath + 'msmc'
 msmcStd  = msmcOut + '.stdout'
 msmcErr  = msmcOut + '.stderr'
 msmctime = msmcOut + '.time'
 
-msmcCmd += ['-o', msmcOut, '-t', '%d'%nPrc, '-i', '%d'%args.nIters[0]]
+msmcCmd += ['-o', msmcOut, '-t', '%d'%nPrc, '-i', '%d'%args.nIters[0], '-R']
 
 msmcCmd += inputFilenames
 
 with open(msmcStd, 'w') as out, open(msmcErr,"w") as err, open(msmctime,"w") as t:
     start = time.time()
-    t.write(' '.join(msmcCmd))
+    t.write(' '.join(msmcCmd) + '\n')
     call(msmcCmd, stdout = out, stderr = err)
     tot   =  time.time() - start
     t.write('time ' + str(tot) + '\n')

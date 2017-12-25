@@ -23,11 +23,11 @@ parser.add_argument('-r', action='store_true',
 parser.add_argument('-o', default = 'muts',
                     help='Output prefix (to be used for all output files; default = muts)')
 parser.add_argument('-psmc', action='store_true',
-                    help='Generate output files compatible as PSMC input.')
+                    help='Generate output files compatible as PSMC input')
 parser.add_argument('-bin', type=int, default=100,
-                    help='Bin size (for PSMC output; default=100.')
+                    help='Bin size (for PSMC output; default=100)')
 parser.add_argument('-msmc', action='store_true',
-                    help='Generate output files compatible as MSMC input.')
+                    help='Generate output files compatible as MSMC input')
 
 
 # read input flags
@@ -131,6 +131,10 @@ if not args.r:
     if (not args.msmc) and (not args.psmc):
         sys.stderr.write('To generate output, use -psmc or -msmc flags. No output generated')
         exit(0)
+    
+    # write command line to file
+    with open(args.o + 'cmd.txt', 'w') as f:
+        f.write(" ".join(sys.argv) + '\n')
         
     # generate output in MSMC format
     if args.msmc:

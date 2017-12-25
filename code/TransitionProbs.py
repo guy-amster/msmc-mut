@@ -1,6 +1,7 @@
 import numpy as np
 import math
 import scipy.integrate as integrate
+from Parallel import writeOutput
 
 # TODO replace all asserts with assertTrue etc
 
@@ -8,6 +9,10 @@ import scipy.integrate as integrate
 class TransitionProbs(object):
     
     def __init__(self, model, theta):
+        
+        # debug 
+        #writeOutput('trnsProb init', 'DBG')
+        #theta.printVals('DBG')
         
         self._model = model
         self._theta = theta

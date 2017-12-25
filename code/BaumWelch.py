@@ -83,7 +83,10 @@ def BaumWelch(model, observations, nIterations = 20, trueTheta = None, theta = N
         # we expect the log likelihood at the next iteration to be higher than this        
         bound = -np.inf
                 
-        # log column names.
+        # write intervals
+        writeOutput('intervals: ' + ','.join([str(x) for x in model.segments.boundaries]), 'loop')
+        
+        # write column names.
         colNames = ['iter', 'lambda', 'r', 'u', 'logL', 'Q-Init', 'Q-Max']
         if gof is not None:
                 for l in gof:

@@ -1,7 +1,7 @@
 from Containers import Model
 from ObservedSequence import ObservedSequence
 from BaumWelch import BaumWelch
-from Parallel import initParallel, runParallel, writeOutput
+from Parallel import initParallel, runParallel, runMemberFunc, writeOutput, OutputWriter
 import numpy as np 
 import os
 import sys
@@ -25,6 +25,10 @@ parser.add_argument('-par', metavar = ('nProcesses'), type=int, default=multipro
                    help='Number of processes to use (default: number of CPU\'s).')
 parser.add_argument('input', metavar = ('inputFile'), nargs='+', 
                    help='Input files. Supports Unix filename pattern matching (eg, chr*.txt or inputfiles/chr*.txt ).')
+# TODO remove
+parser.add_argument('-bnd', default='none',
+                   help='TODO REMOVE.')
+
 
 # TODO make sure everuthing works with nPrc = 1
 
@@ -39,7 +43,9 @@ if args.gof is not None:
 initParallel(args.par, args.o)
 
 # log command line
+# TODO perhaps printOutput() ?
 writeOutput(" ".join(sys.argv))
+writeOutput('BW steps will be spanned over %d processes'%args.par)
 
 # read input dir & match all input files...
 files = []
@@ -52,14 +58,13 @@ for inpPattern in args.input:
                         files.append(pathName + '/' + f)
 
 
-observations = [ObservedSequence.fromFile(f) for f in files]
+observations = runParallel(runMemberFunc(ObservedSequence, 'fromFile'), files)
 
 writeOutput('read %d input files (%s)'%(len(files), ','.join(files)))
 # TODO handle exceptions well, path doesn't exist or file doesn't exist
 
-writeOutput('BW steps will be spanned over %d processes'%args.par)
 
-# TODO move somewhere
+# TODO THIS IS TEMPORARY
 def calcPi(observations):
         het, length = 0, 0
         # TODO support missing sites, different site types etc
@@ -69,9 +74,27 @@ def calcPi(observations):
         pi = float(het)/float(length)
         return pi
 
+pi = calcPi(observations)
+if args.bnd == 'msmc':
+        boundaries  = [-0.5*pi*math.log1p(-1.0*i/40.0) for i in xrange(11)]
+        boundaries += [-0.5*pi*math.log1p(-1.0*i/40.0) for i in xrange(12,40,2)]
+        boundaries += [np.inf]
+elif args.bnd == 'u1':
+        boundaries = [0.0, 0.00002732, 0.00010245, 0.003415, np.inf]
+elif args.bnd == 'r1':
+        boundaries = [0.0, 0.00000452, 0.00001695, 0.000565, np.inf]
+elif args.bnd == 'cu1':
+        boundaries = [0.0, 0.000111572, 0.000255413, 0.000458145, 0.000804719, np.inf]
+elif args.bnd == 'cr1':
+        boundaries = [0.0, 8.92574E-05, 0.00020433, 0.000366516, 0.000643775, np.inf]
+else:
+        writeOutput('bnd not supported: ' + args.bnd)
+        assert 1 == 0
+        
+
 start = time.time()
 
-model = Model(calcPi(observations), fixedR=(not args.fixedMu), fixedLambda=False, fixedMu=args.fixedMu)       
+model = Model(pi, boundaries, fixedR=(not args.fixedMu), fixedLambda=False, fixedMu=args.fixedMu)       
 BaumWelch(model, observations, nIterations=args.iter, gof=args.gof)
         
 writeOutput('Done (overall execution time: %f minutes).'%((time.time()-start)/60))

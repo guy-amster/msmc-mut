@@ -1,7 +1,6 @@
 import random
 import math
 import numpy as np
-from functools import partial
 from scipy.optimize import minimize
 from TransitionProbs import TransitionProbs
 from EmissionProbs import EmissionProbs
@@ -114,9 +113,10 @@ class HiddenSeqSummary(object):
                       x0,
                       #constraints=tuple(consts),
                       tol=1e-7,
-                      options={'disp': True, 'maxiter': 1000000}
-                      #options={'maxiter': 1000000}
+                      #options={'disp': True, 'maxiter': 1000000}
+                      options={'maxiter': 1000000}
                       )
+        writeOutput('optimizer output (val: %f)\n'%-op.fun + str(Theta.fromUnconstrainedVec(self._model, op.x)),'DBG')
         
         return (Theta.fromUnconstrainedVec(self._model, op.x), -op.fun)
     
@@ -144,7 +144,7 @@ class HiddenSeqSummary(object):
             
             # run self._maxQSingleStartPoint() on all items in inputs
             # Note: using partial(runMemberFunc, ...) to overcome Pool.map limitations on class methods.
-            res = runParallel(partial(runMemberFunc, instance=self, memberName='_maxQSingleStartPoint'), inputs)
+            res = runParallel(runMemberFunc(self, '_maxQSingleStartPoint'), inputs)
                 
             maxFound = -np.inf
             maxIndex = []
@@ -155,7 +155,7 @@ class HiddenSeqSummary(object):
                     maxTheta = theta
                     maxIndex.append(str(i))
             
-            writeOutput('max-indices: ' + ','.join(maxIndex), filename = 'Debug')
+            writeOutput('max-indices: ' + ','.join(maxIndex), filename = 'DBG')
         
         return maxTheta, maxFound
         

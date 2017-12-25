@@ -1,5 +1,6 @@
 import math
 import random
+import re
 import numpy as np
 from collections import namedtuple
 from TransitionProbs import TransitionProbs
@@ -11,17 +12,24 @@ DefValues = namedtuple('DefValues', 'r u lmb')
 
 # piecewise: A container class specifying fixed parameters for a piecewise function on [0,infinity):
 #            The number of segments, their sizes and boundaries.
-#            The values of the function are not specified here.
+#            The values of the function are not specified by this class.
 class piecewise(object):
     
     # TODO don't take pi like that... 
-    # n: number of segments.
-    def __init__(self, n, pi):
+    # boundaries: segments boundaries (eg, [0,1.0,2.3,inf]).
+    def __init__(self, boundaries):
         
         # number of segments
-        assert n > 0
-        self.n = n
+        self.n = len(boundaries) - 1
+        assert self.n > 0
+        assert boundaries[0] == 0
+        assert np.isinf(boundaries[-1])
+        for i in xrange(self.n):
+            assert boundaries[i] < boundaries[i+1]
         
+        self.boundaries = boundaries
+        
+        '''
         # Segments boundaties
         # Default is based on logarithmic quantiles; e.g. -log(1-i/n) for i=0,...,n where log(0) defined as -inf
         # self.boundaries = [-math.log1p(-1.0*i/self.n) for i in xrange(self.n)] + [np.inf]
@@ -32,14 +40,13 @@ class piecewise(object):
         self.boundaries = [0.0, 0.00002732, 0.00010245, 0.003415, np.inf] # mu
         self.boundaries = [0.0, 0.00000452, 0.00001695, 0.000565, np.inf]
         assert len(self.boundaries) == (n+1)
-        # TODO move this to BW.py so all outputs'll be written from there...
-        writeOutput('intervals: ' + ','.join([str(x) for x in self.boundaries]), 'loop')
+        '''
         
         # Size of segments (notice: last segment size is np.inf)
         self.delta = np.diff(self.boundaries)
     
     # Find in which bin the input t falls, and return the bin's index.
-    # Bins are indexed 0,1,...,n-1.
+    # Bins are indexed as 0,1,...,n-1.
     def bin(self, t):
         assert (0.0 <= t and t < np.inf)
         
@@ -64,20 +71,20 @@ class HmmModel(object):
 # TODO change name...
 class Model(HmmModel):
     
-    # fixedR      = True: assumes r (the recombination rate) is a fixed constant.
+    # fixedR      = True: assumes r (the recombination rate) is a fixed constant, rather than a free parameter.
     # fixedLambda = true: assumes lambda(t) is a constant (independent of time).
     # fixedMu     = True: assumes u(t) is a constant (independent of time).
     # TODO constants values are specified in TODO.
     # TODO fixed here should be expanded to assume specific cons. / assume unknown constant (no change with time)
     # TODO also model could accept defVals as input....
     # TODO don't take pi like that - that's weird
-    def __init__(self, pi, fixedR=True, fixedLambda=False, fixedMu=False):
+    def __init__(self, pi, boundaries, fixedR=True, fixedLambda=False, fixedMu=False):
         self.modelType  = 'full'
         
         # Fixed paramaters for the segments defining the discrete hmm states and underlying the piecewise functions lambda(t) & u(t).
         # TODO are the same segments really ideal for both the inference of u & lambda (in terms of power)?
         # TODO replace 4 with 25
-        self.segments   = piecewise(4, pi)
+        self.segments   = piecewise(boundaries)
 
         self.nStates    = self.segments.n
         self.nEmissions = 2
@@ -100,6 +107,41 @@ class Model(HmmModel):
             self.defVals = DefValues(1.0, 4.0, (8.0/pi))
         else:
             self.defVals = DefValues(.25, 1.0, (2.0/pi))
+    
+    # read the parameters of the model from a string
+    @classmethod
+    def fromString(cls, s):
+        pattern = re.compile(r"""
+                                 ^
+                                  fixedR:      \t\t (?P<fixedR>      True|False  )     \n
+                                  fixedLambda: \t   (?P<fixedLambda> True|False  )     \n
+                                  fixedMu:     \t   (?P<fixedMu>     True|False  )     \n
+                                  boundaries:  \t   (?P<boundaries>  ((\d|\.)+,)+) inf \n
+                                 $
+                             """, re.VERBOSE)
+
+        match = pattern.match(s)
+        assert match is not None
+        
+        fixedR      = match.group("fixedR")      == 'True'
+        fixedLambda = match.group("fixedLambda") == 'True'
+        fixedMu     = match.group("fixedMu")     == 'True'
+        boundaries  = [float(x) for x in match.group("boundaries").split(',')[:-1]] + [np.inf]
+        
+        # TODO remove pi
+        pi = 0.666
+        return cls(pi, boundaries, fixedR, fixedLambda, fixedMu)
+        
+    
+    # TODO overide __str__ instead?
+    # print the paramters of the models as string.
+    def toString(self):
+        res  = 'fixedR:\t\t%s\n'    % self.fixedR
+        res += 'fixedLambda:\t%s\n' % self.fixedLambda
+        res += 'fixedMu:\t%s\n'     % self.fixedMu
+        res += 'boundaries:\t%s\n'  % ','.join([str(x) for x in self.segments.boundaries])
+        
+        return res
 
 # HmmTheta: a container class for the non-fixed parameters of an HmmModel.
 class HmmTheta(object):
@@ -260,9 +302,9 @@ class Theta(HmmTheta):
         return cls(model, r=r, lambdaV=lambdaV, uV=uV)
     
     # TODO Do I need this?
-    def printVals(self):
-        print 'Lambda: ', self.lambdaV
-        print 'U:      ', self.uV
-        print 'r:      ', self.r
-        
+    def __str__(self):
+        res  = 'lambda: ' + ','.join([str(x) for x in self.lambdaV]) + '\n'
+        res += 'u     : ' + ','.join([str(x) for x in self.uV     ]) + '\n'
+        res += 'u     : ' + str(self.r)                              + '\n'
+        return res        
     

@@ -36,7 +36,7 @@ class ObservedSequence(object):
             assert max(nonZeroValues) <= 255
         
         # TODO optimize size for performance
-        self.maxDistance = 1000
+        self.maxDistance = 3000
         
         # self.positions is a sorted list of positions such that:
         #                 - It includes all non-zero positions.
