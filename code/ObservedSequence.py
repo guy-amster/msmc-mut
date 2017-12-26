@@ -32,7 +32,7 @@ class ObservedSequence(object):
                 assert nonZeroPositions[i-1] < nonZeroPositions[i]
             assert nonZeroPositions[-1] < seqLength   
         
-            # if more than 256 observation types are required, change uint8 type below...
+            # more than 255 observation types are not supported by the uint8 type used below.
             assert max(nonZeroValues) <= 255
         
         # TODO optimize size for performance
