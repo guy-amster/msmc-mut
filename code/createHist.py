@@ -22,6 +22,9 @@ parser.add_argument('-r', dest='r', metavar = ('rho','nSites'), nargs=2, type=fl
                    help='see ms\' specifications')
 parser.add_argument('-eN', dest='eN', metavar = ('t','x'), action='append', nargs=2, type=float, 
                    help='see ms\' specifications')
+parser.add_argument('-en', dest='en', metavar = ('t','i', 'x'), action='append', nargs=3, type=float, 
+                   help='see ms\' specifications')
+
 
 # read input
 args = parser.parse_args()
@@ -32,7 +35,17 @@ u_vals       = [args.u]
 nSites       = args.r[1]
 _N0          = args.t/(4.0 * args.u * nSites)
 r            = args.r[0]/(4.0 * _N0 * nSites)
-eN           = sorted(args.eN, key=lambda x:x[0])
+
+# combine eN and en flags and sort by t
+eN = []
+if args.eN is not None:
+    eN += args.eN
+if args.en is not None:
+    for x in args.en:
+        assert x[1] == 1.0
+        eN.append((x[0],x[2]))
+eN = sorted(eN, key=lambda x:x[0])
+
 N_vals       = [_N0] + [x[1]*_N0 for x in eN]
 N_boundaries = [0.0] + [x[0]*4*_N0 for x in eN] + [np.inf]
 
