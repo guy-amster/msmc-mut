@@ -80,7 +80,6 @@ def readHistory(filename):
     u_boundaries, u_vals = _parseTable(match.group("uTab"))
     N_boundaries, N_vals = _parseTable(match.group("nTab"))
     
-    print r, u_boundaries, u_vals, N_boundaries, N_vals
     return r, u_boundaries, u_vals, N_boundaries, N_vals
     
     

@@ -14,11 +14,11 @@ parser = argparse.ArgumentParser(description='Create hist object using ms\' and 
 # TODO these are not optional...
 parser.add_argument('-o', nargs='?', type=argparse.FileType('w'), default=sys.stdout, metavar='filename',
                     help='output file (defaults to stdout)')
-parser.add_argument('-t', dest='t', metavar = ('theta'), type=float, 
+parser.add_argument('-t', dest='t', metavar = ('theta'), type=float, required=True,
                    help='see ms\' specifications')
-parser.add_argument('-u', dest='u', metavar = ('u'), type=float, 
+parser.add_argument('-u', dest='u', metavar = ('u'), type=float, required=True,
                    help='u (per-gen mutation rate)')
-parser.add_argument('-r', dest='r', metavar = ('rho','nSites'), nargs=2, type=float, 
+parser.add_argument('-r', dest='r', metavar = ('rho','nSites'), nargs=2, type=float, required=True,
                    help='see ms\' specifications')
 parser.add_argument('-eN', dest='eN', metavar = ('t','x'), action='append', nargs=2, type=float, 
                    help='see ms\' specifications')
