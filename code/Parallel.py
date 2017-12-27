@@ -142,7 +142,7 @@ class OutputWriter(object):
         
         if line[-1] != '\n':
             line = line + '\n'
-        # add process ID to DBG prints:
+        # add process ID to debug and error prints:
         if filename in ['DBG', 'ErrorLog']:
             line = '(process %s) '%originProcess + line
     

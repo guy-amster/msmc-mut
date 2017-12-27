@@ -1,6 +1,8 @@
 import re
 import numpy as np
 
+# TODO this should be merged with Theta class; 'history' change to params? 
+
 def _writeTable(header, tabHeader, bounds, vals):
     
     # verify input validity
@@ -14,7 +16,7 @@ def _writeTable(header, tabHeader, bounds, vals):
     
     res = header
     template = '\t{0:<24}{1:<24}{2:<24}\n'
-    res += template.format('t_start (generations)', 't_end (generations)', tabHeader)
+    res += template.format('t_start', 't_end', tabHeader)
     for i in xrange(len(vals)):
         res += template.format(bounds[i], bounds[i+1], vals[i])
     return res
@@ -29,7 +31,8 @@ def writeHistory(r, u_boundaries, u_vals, N_boundaries, N_vals):
     
     return res
 
-# parse table (in the format defined by _writeTable) into array of boundaries and values
+# parse a table (either u or N table in the format defined by _writeTable)
+# into array of boundaries and values
 def _parseTable(tab):
     bounds, vals = [], []
     
@@ -53,23 +56,19 @@ def _parseTable(tab):
         
     return bounds, vals
 
-# read history file in the format defined above
-def readHistory(filename):
-    
-    # read input file to string
-    with open(filename, 'r') as f:
-        inp = f.read()
+# parse the output in the format defined by writeHistory
+def _parseHistory(header, footer, inp):
     
     # define format pattern
     pattern = re.compile(r"""
-                                 ^
+                                 %s
                                   recombination\ rate:\t(?P<r>.+)\n\n       # recombination rate
                                   .+\n\t.+\n                                # mutaion rate table headers
                                   (?P<uTab>(\t.+\n)+) \n                    # mutation rate table
                                   .+\n\t.+\n                                # population size table headers
                                   (?P<nTab>(\t.+\n)+)                       # population size table
-                                 $
-                             """, re.VERBOSE)
+                                 %s
+                             """%(header, footer), re.VERBOSE)
     
     # match input to pattern
     match = pattern.match(inp)
@@ -82,4 +81,27 @@ def readHistory(filename):
     
     return r, u_boundaries, u_vals, N_boundaries, N_vals
     
+# read history file in the format defined above
+def readHistory(filename):
+    
+    # read input file to string
+    with open(filename, 'r') as f:
+        inp = f.read()
+    return _parseHistory('^', '$', inp)
+
+# read history from iteration nIter in 'loop' output file
+# (nIter = -1 corresponds to the last iteration)
+def readLoop(filename, nIter):
+    return _parseHistory('After %d iterations:\n\n', '$', inp)
+
+# scale parameters by C
+def scale(C, r, u_boundaries, u_vals, N_boundaries, N_vals):
+    assert C > 0.0
+    r = r*C
+    u_vals = [x*C for x in u_vals]
+    N_vals = [x/C for x in N_vals]
+    u_boundaries = [x/C for x in u_boundaries]
+    N_boundaries = [x/C for x in N_boundaries]
+    return r, u_boundaries, u_vals, N_boundaries, N_vals
+
     

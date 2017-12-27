@@ -1,5 +1,4 @@
-__author__ = 'Guy Amster'
-
+#!/usr/bin/env python
 import argparse
 import sys
 import numpy as np

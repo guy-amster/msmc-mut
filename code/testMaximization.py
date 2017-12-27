@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from Containers import Model, Theta
 import scipy.integrate as integrate
 import numpy as np

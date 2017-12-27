@@ -50,6 +50,38 @@ def _parallelExp(model, theta, observations):
                 resSum = resSum + res[i]
         return resSum
 
+def _logVals(header, theta, statsNames, stats, gof):
+        # print header
+        writeOutput(header,'loop')
+        writeOutput('\n','loop')
+        
+        # print theta
+        # TODO replace with object method... also, _model
+        N_boundaries = theta._model.segments.boundaries
+        if theta._model.fixedMu:
+                u_boundaries = [0.0, np.inf]
+        else:
+                u_boundaries = N_boundaries
+        writeOutput(writeHistory(theta.r, u_boundaries, theta.uV, N_boundaries, [0.5/x for x in theta.lambdaV]), 'loop')
+        writeOutput('\n','loop')
+        
+        # calculate gof stats
+        if len(gof) > 0:
+                start = time.time()
+                for c in gof:
+                        vals.append(c.G(theta))
+                writeOutput('calculated gof statistics within %f seconds'%(time.time()-start))        
+        assert len(statsNames) == len(vals)
+
+        temp = ''
+        for i in xrange(len(statsNames)):
+                temp += '{%d:<24}'%i
+        writeOutput(temp.format(tuple(statsNames),'loop'))
+        writeOutput(temp.format(tuple(vals),'loop'))
+        writeOutput('\n','loop')
+
+# TODO remove
+'''
 def _logVals(i, theta, logL, QInit, QMax, gof):
         vals = [i]
         vals.append(','.join([str(x) for x in theta.lambdaV]))
@@ -62,14 +94,15 @@ def _logVals(i, theta, logL, QInit, QMax, gof):
                         vals.append(c.G(theta))
                 writeOutput('calculated gof statistics within %f seconds'%(time.time()-start))
         writeOutput('\t'.join([str(v) for v in vals]), 'loop')
+'''
         
 # model         : a (derived) HmmModel class
 # observations  : a list of ObservedSequence objects
 # nIterations   : number of BW iterations. # TODO is there's a standard stopping criteria?
 # trueTheta     : for simulated data (will be used for printing statistics)
 # theta         : a theta value to initiate the BW process from; default is to use a random theta.
-# gof           : List of paramters l for GOF statistics G_l. If none, GOF statistics are not calculated.
-def BaumWelch(model, observations, nIterations = 20, trueTheta = None, theta = None, gof = None):
+# gof           : List of paramters l for GOF statistics G_l. If empty, GOF statistics are not calculated.
+def BaumWelch(model, observations, nIterations = 20, trueTheta = None, theta = None, gof = []):
         
                         
         # initialize theta
@@ -83,17 +116,16 @@ def BaumWelch(model, observations, nIterations = 20, trueTheta = None, theta = N
         # we expect the log likelihood at the next iteration to be higher than this        
         bound = -np.inf
                 
-        # write intervals
-        writeOutput('intervals: ' + ','.join([str(x) for x in model.segments.boundaries]), 'loop')
+        # print model specifications:
+        writeOutput(model.printVals + '\n', 'loop')
         
-        # write column names.
-        colNames = ['iter', 'lambda', 'r', 'u', 'logL', 'Q-Init', 'Q-Max']
-        if gof is not None:
-                for l in gof:
-                        colNames.append('G%d'%l)
-        writeOutput('\t'.join(colNames), 'loop')
+        # statistics to be collected
+        statsNames = ['logL', 'Q-Init', 'Q-Max']
+        for l in gof:
+                statsNames.append('G%d'%l)
         
-        if gof is not None:
+        # initialize GOF classes
+        if len(gof) > 0:
                 start = time.time()
                 gof = [GOF(model, observations, l) for l in gof]
                 writeOutput('initialized gof statistics within %f seconds'%(time.time()-start))
@@ -102,8 +134,8 @@ def BaumWelch(model, observations, nIterations = 20, trueTheta = None, theta = N
         if trueTheta is not None:
                 trueL = _parallelExp(model, trueTheta, observations).logL
                 
-                # log True theta vals
-                _logVals('T', trueTheta, trueL, '.', '.', gof)
+                # log True theta vals and statistics
+                _logVals('True parameters:', trueTheta, statsNames, [trueL, '.', '.'], gof)
                 
         for i in xrange(nIterations):
                 
@@ -117,13 +149,6 @@ def BaumWelch(model, observations, nIterations = 20, trueTheta = None, theta = N
                 # sanity check: log(O|theta) has increased as expected in the last iteration
                 if exp.logL < bound:
                         writeOutput('WARNING **** BW error 1 %f %f'%(exp.logL, bound), 'ErrorLog')
-                
-                # print statistics for simulated data
-                if trueTheta is not None:
-                        # TODO EITHER REMOVE OR MOVE DIST TO THETA CLASSES
-                        #x = _dist(trueTheta, theta)
-                        #print 'distance from true theta: ', x
-                        pass
                 
                 # sanity check (this is just Jensen's inequality... Q(theta | theta) = E( log(P(O,Z|theta) ) <= log( E(P(O,Z|theta)) ) = log( P(O|theta) ) 
                 Qtheta = exp.Q(theta)
@@ -150,13 +175,14 @@ def BaumWelch(model, observations, nIterations = 20, trueTheta = None, theta = N
                                 writeOutput('WARNING **** BW error 4 %f %f'%(exp.Q(trueTheta), Qmax), 'ErrorLog')
                 
                 # log iteration
-                _logVals(i, theta, exp.logL, Qtheta, Qmax, gof)
+                _logVals('After %d iterations:'%i, theta, statsNames, [exp.logL, Qtheta, Qmax], gof)
 
                 # update theta
                 theta = newTheta
                                 
         # log final value of theta (for which some statistics are not calculated)
-        _logVals(nIterations, theta, '.', '.', '.', gof)
+        _logVals('After %d iterations:'%nIterations, theta, statsNames, ['.', '.', '.'], gof)
+
         
         return theta
                 

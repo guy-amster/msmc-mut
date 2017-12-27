@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from Containers import Model
 from ObservedSequence import ObservedSequence
 from BaumWelch import BaumWelch
@@ -89,10 +90,12 @@ elif args.bnd == 'cu1':
 elif args.bnd == 'cr1':
         boundaries = [0.0, 8.92574E-05, 0.00020433, 0.000366516, 0.000643775, np.inf]
 else:
+                assert args.fixedMu
                 r, u_boundaries, u_vals, N_boundaries, N_vals = readHistory(args.bnd)
-                print N_boundaries
+                r, u_boundaries, u_vals, N_boundaries, N_vals = scale(1.0/u_vals[0], r, u_boundaries, u_vals, N_boundaries, N_vals)
+                #print N_boundaries
                 boundaries = [b*u_vals[0] for b in N_boundaries]
-                print boundaries
+                #print boundaries
                 # exit()
         
 

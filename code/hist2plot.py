@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import argparse
 import math
 import seaborn as sns
@@ -6,7 +8,7 @@ plt.switch_backend('agg')
 import numpy as np
 from history import readHistory
 
-
+# define input structure using argparse
 parser = argparse.ArgumentParser(description='Plot population and mutation histories  \n ')
 parser.add_argument('-p', dest='p', metavar = ('filename', 'label'), action='append', nargs=2, required=True,
                    help='input history file and corresponding label')

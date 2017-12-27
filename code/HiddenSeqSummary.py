@@ -46,7 +46,7 @@ class HiddenSeqSummary(object):
         #   DecTo[j] is the proportion of transitions i->j for some i>j
         self.decTo   = np.array([np.sum(self.transitions[(j+1):,j]) for j in xrange(model.nStates)])
             
-    # Combine two classes to one
+    # Combine two classes to one (ie calculate the combined statistics on both sequences)
     def __add__(self, other):
         
         assert self.transitions.shape == other.transitions.shape
@@ -112,9 +112,9 @@ class HiddenSeqSummary(object):
         op = minimize(fun,
                       x0,
                       #constraints=tuple(consts),
-                      tol=1e-7,
+                      tol=1e-5, #TODO -7
                       #options={'disp': True, 'maxiter': 1000000}
-                      options={'maxiter': 1000000}
+                      options={'maxiter': 10000}#TODO 00}
                       )
         writeOutput('optimizer output (val: %f)\n'%-op.fun + str(Theta.fromUnconstrainedVec(self._model, op.x)),'DBG')
         
@@ -122,7 +122,8 @@ class HiddenSeqSummary(object):
     
     # calculate theta* that maximizes Q (ie EM maximization step).
     # returns theta* and the attained maximum value.
-    def maximizeQ(self, nStartPoints = 290, initTheta = None):
+    # TODO nStartPoints 290?
+    def maximizeQ(self, nStartPoints = 60, initTheta = None):
         
         # in the case of a standard HMM, it's not necessary to evaluate Q, as there's a closed form global maximum
         if self._model.modelType == 'basic':
@@ -139,7 +140,7 @@ class HiddenSeqSummary(object):
         
         # in our case (the model constrains the matrices & initial distribution), we need to numerically find a (hopefully global) maximum
         else:
-            # initialize maximization at initTheta, null theta, and (nStartPoints - 2) random theta
+            # initialize maximization at initTheta, default theta, and (nStartPoints - 2) random theta
             inputs = [initTheta, Theta(self._model)] + [None for _ in xrange(nStartPoints - 2)]
             
             # run self._maxQSingleStartPoint() on all items in inputs

@@ -111,14 +111,15 @@ class Model(HmmModel):
             self.defVals = DefValues(.25, 1.0, (2.0/pi))
     
     # read the parameters of the model from a string
+    # TODO remove or fix 
     @classmethod
     def fromString(cls, s):
         pattern = re.compile(r"""
                                  ^
-                                  fixedR:      \t\t (?P<fixedR>      True|False  )     \n
-                                  fixedLambda: \t   (?P<fixedLambda> True|False  )     \n
-                                  fixedMu:     \t   (?P<fixedMu>     True|False  )     \n
-                                  boundaries:  \t   (?P<boundaries>  ((\d|\.)+,)+) inf \n
+                                  \tfixedR:      \t\t (?P<fixedR>      True|False  )     \n
+                                  \tfixedLambda: \t   (?P<fixedLambda> True|False  )     \n
+                                  \tfixedMu:     \t   (?P<fixedMu>     True|False  )     \n
+                                  \tboundaries:  \t   (?P<boundaries>  ((\d|\.)+,)+) inf \n
                                  $
                              """, re.VERBOSE)
 
@@ -135,13 +136,14 @@ class Model(HmmModel):
         return cls(pi, boundaries, fixedR, fixedLambda, fixedMu)
         
     
-    # TODO overide __str__ instead?
     # print the paramters of the models as string.
-    def toString(self):
-        res  = 'fixedR:\t\t%s\n'    % self.fixedR
-        res += 'fixedLambda:\t%s\n' % self.fixedLambda
-        res += 'fixedMu:\t%s\n'     % self.fixedMu
-        res += 'boundaries:\t%s\n'  % ','.join([str(x) for x in self.segments.boundaries])
+    def printVals(self):
+        template = '\t{0:<24}{1:<24}\n'
+        res  = template.format('fixedR', self.fixedR)
+        res += template.format('fixedLambda', self.fixedLambda)
+        res += template.format('fixedMu', self.fixedMu)
+        # TODO if I accept different boundaries add them here... 
+        res += template.format('boundaries', ','.join([str(x) for x in self.segments.boundaries]))
         
         return res
 
@@ -307,6 +309,6 @@ class Theta(HmmTheta):
     def __str__(self):
         res  = 'lambda: ' + ','.join([str(x) for x in self.lambdaV]) + '\n'
         res += 'u     : ' + ','.join([str(x) for x in self.uV     ]) + '\n'
-        res += 'u     : ' + str(self.r)                              + '\n'
+        res += 'r     : ' + str(self.r)                              + '\n'
         return res        
     

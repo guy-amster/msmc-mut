@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 from Containers import HmmModel, HmmTheta
 import numpy as np
 from BaumWelchExpectation import BaumWelchExpectation

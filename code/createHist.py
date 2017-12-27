@@ -1,4 +1,5 @@
-# TODO 'script' this so I could run without python cre... ?
+#!/usr/bin/env python
+
 import argparse
 import sys
 import re
@@ -11,7 +12,6 @@ parser = argparse.ArgumentParser(description='Create hist object using ms\' and 
 # TODO perhaps this 'history' module should serve instead of model & theta in a more general way?
 
 # define input structure using argparse
-# TODO these are not optional...
 parser.add_argument('-o', nargs='?', type=argparse.FileType('w'), default=sys.stdout, metavar='filename',
                     help='output file (defaults to stdout)')
 parser.add_argument('-t', dest='t', metavar = ('theta'), type=float, required=True,
