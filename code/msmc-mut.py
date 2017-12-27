@@ -2,6 +2,7 @@ from Containers import Model
 from ObservedSequence import ObservedSequence
 from BaumWelch import BaumWelch
 from Parallel import initParallel, runParallel, runMemberFunc, writeOutput, OutputWriter
+from history import readHistory
 import numpy as np 
 import os
 import sys
@@ -13,12 +14,13 @@ import time
 # specify flags & usage
 parser = argparse.ArgumentParser(description='Infer population size and mutation rate histories. \n ')
 
-parser.add_argument('-o', default='', metavar = ('prefix'),
-                    help='File prefix to use for all output files.')
+parser.add_argument('-o', default='', metavar = ('prefix'), 
+                    help='Prefix to use for all output files.')
 parser.add_argument('-fixedMu', action='store_true',
                     help='Assume constant mutation rate, and scale all outputs (time intervals, coalescence rates and recombination rate) by the mutation rate.')
 parser.add_argument('-iter', type=int, default=50, metavar = ('nIterations'),
                     help='Number of Baum-Welch iterations (default = 50)')
+# TODO remove gof ...
 parser.add_argument('-gof', metavar = ('l'), action='append', type=int, 
                    help='Calculate the goodness-of-fit parameter G_l.')
 parser.add_argument('-par', metavar = ('nProcesses'), type=int, default=multiprocessing.cpu_count(),
@@ -57,12 +59,11 @@ for inpPattern in args.input:
                 if fnmatch.fnmatch(f, os.path.basename(inpPattern)):
                         files.append(pathName + '/' + f)
 
-
+# read all input files (executed in parallel)
 observations = runParallel(runMemberFunc(ObservedSequence, 'fromFile'), files)
 
 writeOutput('read %d input files (%s)'%(len(files), ','.join(files)))
 # TODO handle exceptions well, path doesn't exist or file doesn't exist
-
 
 # TODO THIS IS TEMPORARY
 def calcPi(observations):
@@ -88,8 +89,11 @@ elif args.bnd == 'cu1':
 elif args.bnd == 'cr1':
         boundaries = [0.0, 8.92574E-05, 0.00020433, 0.000366516, 0.000643775, np.inf]
 else:
-        writeOutput('bnd not supported: ' + args.bnd)
-        assert 1 == 0
+                r, u_boundaries, u_vals, N_boundaries, N_vals = readHistory(args.bnd)
+                print N_boundaries
+                boundaries = [b*u_vals[0] for b in N_boundaries]
+                print boundaries
+                # exit()
         
 
 start = time.time()

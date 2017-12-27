@@ -78,6 +78,8 @@ class Model(HmmModel):
     # TODO fixed here should be expanded to assume specific cons. / assume unknown constant (no change with time)
     # TODO also model could accept defVals as input....
     # TODO don't take pi like that - that's weird
+    # TODO differentiate 'fixed' and 'constant'
+    # TODO merge with 'history'
     def __init__(self, pi, boundaries, fixedR=True, fixedLambda=False, fixedMu=False):
         self.modelType  = 'full'
         
@@ -186,7 +188,7 @@ class HmmTheta(object):
 # theta: a container class for the non-fixed parameters of the model.
 class Theta(HmmTheta):
     
-    # model: a msmcMarkovModel object, containing the fixed parameters of the model.
+    # model   : a Model object, containing the fixed parameters of the model.
     # r       : scaled (TODO explain!) recombination rate.
     # uV      : a vector of the scaled (TODO explain!) mutation rates in the different time-segments defined by the model.
     # lambdaV : a vector of the coalescence (TODO explain!) rates in the different time-segments defined by the model.
