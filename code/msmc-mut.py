@@ -3,7 +3,7 @@ from Containers import Model
 from ObservedSequence import ObservedSequence
 from BaumWelch import BaumWelch
 from Parallel import initParallel, runParallel, runMemberFunc, writeOutput, OutputWriter
-from history import readHistory
+from history import readHistory, scale
 import numpy as np 
 import os
 import sys
@@ -60,6 +60,7 @@ for inpPattern in args.input:
                 if fnmatch.fnmatch(f, os.path.basename(inpPattern)):
                         files.append(pathName + '/' + f)
 
+# TODO proper error message if (a) file doesn't exist (b) file doesn't match format
 # read all input files (executed in parallel)
 observations = runParallel(runMemberFunc(ObservedSequence, 'fromFile'), files)
 
@@ -101,8 +102,14 @@ else:
 
 start = time.time()
 
-model = Model(pi, boundaries, fixedR=(not args.fixedMu), fixedLambda=False, fixedMu=args.fixedMu)       
-BaumWelch(model, observations, nIterations=args.iter, gof=args.gof)
-        
+model = Model(pi, boundaries, fixedR=(not args.fixedMu), fixedLambda=False, fixedMu=args.fixedMu)
+if args.gof is not None:
+        gof = args.gof
+else:
+        gof = []
+
+BaumWelch(model, observations, nIterations=args.iter, gof=gof)
+
+# TODO direct stderr and stdout also to files???        
 writeOutput('Done (overall execution time: %f minutes).'%((time.time()-start)/60))
 

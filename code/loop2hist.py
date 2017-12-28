@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser(description='Read and scale inferred parameters
 parser.add_argument('input', help='input loop file')
 parser.add_argument('-o', nargs='?', type=argparse.FileType('w'), default=sys.stdout, metavar='filename',
                     help='output file (defaults to stdout)')
-parser.add_argument('-iter', dest='iter', metavar = ('n'), default=-1,
+parser.add_argument('-iter', dest='iter', metavar = ('n'), default=-1, type=int,
                    help='Read parameters after the end of the nth iteration (default: last iteration)')
 parser.add_argument('-su', dest='su', metavar = ('u'), type=float,
                     help='Scale parameters such that the mutation rate at time 0 will equal u')

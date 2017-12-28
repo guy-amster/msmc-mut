@@ -69,9 +69,8 @@ def _parseHistory(header, footer, inp):
                                   (?P<nTab>(\t.+\n)+)                       # population size table
                                  %s
                              """%(header, footer), re.VERBOSE)
-    
     # match input to pattern
-    match = pattern.match(inp)
+    match = pattern.search(inp)
     assert match is not None
     
     # read values
@@ -92,7 +91,13 @@ def readHistory(filename):
 # read history from iteration nIter in 'loop' output file
 # (nIter = -1 corresponds to the last iteration)
 def readLoop(filename, nIter):
-    return _parseHistory('After %d iterations:\n\n', '$', inp)
+    
+    # read input file to string
+    with open(filename, 'r') as f:
+        inp = f.read()
+    if nIter == -1:
+        nIter = inp.count('iterations:\n') - 1
+    return _parseHistory('After\ %d\ iterations:\\n\\n'%nIter, '', inp)
 
 # scale parameters by C
 def scale(C, r, u_boundaries, u_vals, N_boundaries, N_vals):

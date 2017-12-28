@@ -7,6 +7,7 @@ from ObservedSequence import ObservedSequence
 from Parallel import writeOutput, runParallel
 from GOF import GOF
 from functools import partial
+from history import writeHistory
 
 
 
@@ -60,24 +61,27 @@ def _logVals(header, theta, statsNames, stats, gof):
         N_boundaries = theta._model.segments.boundaries
         if theta._model.fixedMu:
                 u_boundaries = [0.0, np.inf]
+                u_vals = [theta.uV[0]]
         else:
                 u_boundaries = N_boundaries
-        writeOutput(writeHistory(theta.r, u_boundaries, theta.uV, N_boundaries, [0.5/x for x in theta.lambdaV]), 'loop')
+                u_vals = theta.uV
+        writeOutput(writeHistory(theta.r, u_boundaries, u_vals, N_boundaries, [0.5/x for x in theta.lambdaV]), 'loop')
         writeOutput('\n','loop')
         
         # calculate gof stats
         if len(gof) > 0:
                 start = time.time()
                 for c in gof:
-                        vals.append(c.G(theta))
+                        stats.append(c.G(theta))
                 writeOutput('calculated gof statistics within %f seconds'%(time.time()-start))        
-        assert len(statsNames) == len(vals)
+        assert len(statsNames) == len(stats)
 
-        temp = ''
+        temp = '\t'
         for i in xrange(len(statsNames)):
                 temp += '{%d:<24}'%i
-        writeOutput(temp.format(tuple(statsNames),'loop'))
-        writeOutput(temp.format(tuple(vals),'loop'))
+        writeOutput('Statistics:','loop')
+        writeOutput(temp.format(*statsNames),'loop')
+        writeOutput(temp.format(*stats),'loop')
         writeOutput('\n','loop')
 
 # TODO remove
@@ -117,7 +121,8 @@ def BaumWelch(model, observations, nIterations = 20, trueTheta = None, theta = N
         bound = -np.inf
                 
         # print model specifications:
-        writeOutput(model.printVals + '\n', 'loop')
+        writeOutput('Model specifications:', 'loop')
+        writeOutput(model.printVals() + '\n', 'loop')
         
         # statistics to be collected
         statsNames = ['logL', 'Q-Init', 'Q-Max']
