@@ -6,7 +6,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 plt.switch_backend('agg')
 import numpy as np
-from history import readHistory
+from readUtils import readHist
 
 # define input structure using argparse
 parser = argparse.ArgumentParser(description='Plot population and mutation histories  \n ')
@@ -18,8 +18,8 @@ parser.add_argument('-o', dest='o', metavar = ('filename'), required=True, help=
 args = parser.parse_args()
 
 # read histories
-hists  = [readHistory(h[0]) for h in args.p]
-labels = [h[1]              for h in args.p]
+hists = [readHist(h[0]) for h in args.p]
+labels = [h[1] for h in args.p]
 
 # generate plot
 sns.set_style("darkgrid")
@@ -30,15 +30,19 @@ Xl = np.log10(X)
 
 # Y-axis values:
 maxY = 0.0
+# plot file by file
 for i in xrange(len(args.p)):
-    r, u_boundaries, u_vals, N_boundaries, N_vals = hists[i]
+    # read segments
+    boundaries = hists[i].segments.boundaries
+    # convert coalescence rates to population size
+    N = [0.5/x for x in hists[i].lmbVals]
     
     # translate from generations to years (assuming g=25)
-    N_boundaries = [25*x for x in N_boundaries]
+    boundaries = [25*x for x in boundaries]
     
     # evaluate N on the grid X
-    condlist = [np.logical_and(X >= N_boundaries[j], X < N_boundaries[j+1]) for j in range(len(N_boundaries) - 1)]
-    funclist = [(lambda z: lambda x: z)(val) for val in N_vals]
+    condlist = [np.logical_and(X >= boundaries[j], X < boundaries[j+1]) for j in range(len(boundaries) - 1)]
+    funclist = [(lambda z: lambda x: z)(val) for val in N]
     Y        = np.piecewise(X, condlist, funclist)/10000.0
 
     maxY = max(maxY, max(Y))

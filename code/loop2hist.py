@@ -2,12 +2,11 @@
 import argparse
 import math
 import sys
-from history import readLoop, writeHistory, scale
+from readUtils import readLoop
 
-# input -o output -iter n -su u -sr r
 # define input structure using argparse
 parser = argparse.ArgumentParser(description='Read and scale inferred parameters from loop file\n ')
-parser.add_argument('input', help='input loop file')
+parser.add_argument('filename', help='input loop file')
 parser.add_argument('-o', nargs='?', type=argparse.FileType('w'), default=sys.stdout, metavar='filename',
                     help='output file (defaults to stdout)')
 parser.add_argument('-iter', dest='iter', metavar = ('n'), default=-1, type=int,
@@ -21,13 +20,14 @@ parser.add_argument('-sr', dest='sr', metavar = ('r'), type=float,
 args = parser.parse_args()
 
 # read iteration from loop file
-r, u_boundaries, u_vals, N_boundaries, N_vals = readLoop(args.input, args.iter)
+_, params, _ = readLoop(args.filename)
+coalParams = iterations[args.iter]
 
 # scale, if requested
 if args.su is not None:
-    r, u_boundaries, u_vals, N_boundaries, N_vals = scale(args.su/u_vals[0], r, u_boundaries, u_vals, N_boundaries, N_vals)
+    coalParams.rescale(args.su/coalParams.uVals[0])
 if args.sr is not None:
-    r, u_boundaries, u_vals, N_boundaries, N_vals = scale(args.sr/r, r, u_boundaries, u_vals, N_boundaries, N_vals)
+    coalParams.rescale(args.sr/coalParams.r)
     
 # write as output
-args.o.write(writeHistory(r, u_boundaries, u_vals, N_boundaries, N_vals))
+args.o.write(coalParams)

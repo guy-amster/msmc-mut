@@ -7,7 +7,6 @@ from ObservedSequence import ObservedSequence
 from Parallel import writeOutput, runParallel
 from GOF import GOF
 from functools import partial
-from history import writeHistory
 
 
 
@@ -57,15 +56,7 @@ def _logVals(header, theta, statsNames, stats, gof):
         writeOutput('\n','loop')
         
         # print theta
-        # TODO replace with object method... also, _model
-        N_boundaries = theta._model.segments.boundaries
-        if theta._model.fixedMu:
-                u_boundaries = [0.0, np.inf]
-                u_vals = [theta.uV[0]]
-        else:
-                u_boundaries = N_boundaries
-                u_vals = theta.uV
-        writeOutput(writeHistory(theta.r, u_boundaries, u_vals, N_boundaries, [0.5/x for x in theta.lambdaV]), 'loop')
+        writeOutput(theta, 'loop')
         writeOutput('\n','loop')
         
         # calculate gof stats
@@ -84,21 +75,6 @@ def _logVals(header, theta, statsNames, stats, gof):
         writeOutput(temp.format(*stats),'loop')
         writeOutput('\n','loop')
 
-# TODO remove
-'''
-def _logVals(i, theta, logL, QInit, QMax, gof):
-        vals = [i]
-        vals.append(','.join([str(x) for x in theta.lambdaV]))
-        vals.append(theta.r)
-        vals.append(','.join([str(x) for x in theta.uV]))
-        vals += [logL, QInit, QMax]
-        if gof is not None:
-                start = time.time()
-                for c in gof:
-                        vals.append(c.G(theta))
-                writeOutput('calculated gof statistics within %f seconds'%(time.time()-start))
-        writeOutput('\t'.join([str(v) for v in vals]), 'loop')
-'''
         
 # model         : a (derived) HmmModel class
 # observations  : a list of ObservedSequence objects
@@ -135,7 +111,7 @@ def BaumWelch(model, observations, nIterations = 20, trueTheta = None, theta = N
                 gof = [GOF(model, observations, l) for l in gof]
                 writeOutput('initialized gof statistics within %f seconds'%(time.time()-start))
 
-        
+        # TODO REMOVE OR READ FROM LOOP
         if trueTheta is not None:
                 trueL = _parallelExp(model, trueTheta, observations).logL
                 

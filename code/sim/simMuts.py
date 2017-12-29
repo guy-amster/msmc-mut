@@ -19,8 +19,8 @@ parser.add_argument('-c', type=int, default=1,
                     help='First chromosome number (for msmc output format; default = 1; will be incremented by 1 for every input chromosome)')
 parser.add_argument('-r', action='store_true',
                     help='Estimate r (per-bp in units of 4N0) from input trees. When using this flag, no output will be generated.')
-parser.add_argument('-o', default = 'muts',
-                    help='Output prefix (to be used for all output files; default = muts)')
+parser.add_argument('-o', default = 'chr',
+                    help='Output prefix (to be used for all output files; default = chr)')
 parser.add_argument('-psmc', action='store_true',
                     help='Generate output files compatible as PSMC input')
 parser.add_argument('-bin', type=int, default=100,
@@ -128,12 +128,12 @@ if not args.r:
     
     # write output
     if (not args.msmc) and (not args.psmc):
-        sys.stderr.write('To generate output, use -psmc or -msmc flags. No output generated')
+        sys.stderr.write('No output generated; To generate output, use -psmc or -msmc flags.')
         exit(0)
     
     # write command line to file
-    with open(args.o + 'cmd.txt', 'w') as f:
-        f.write(" ".join(sys.argv) + '\n')
+    #with open(args.o + '_simMuts_cmd.txt', 'w') as f:
+    #    f.write(" ".join(sys.argv) + '\n')
         
     # generate output in MSMC format
     if args.msmc:
@@ -159,7 +159,7 @@ if not args.r:
     if args.psmc:
         chNum = args.c
         binSize = args.bin
-        filename = args.o + '.psmcfa'
+        filename = args.o + 's.psmcfa'
 
         with open(filename, 'w') as f:
             for x in res:

@@ -3,7 +3,6 @@ from Containers import Model
 from ObservedSequence import ObservedSequence
 from BaumWelch import BaumWelch
 from Parallel import initParallel, runParallel, runMemberFunc, writeOutput, OutputWriter
-from history import readHistory, scale
 import numpy as np 
 import os
 import sys
@@ -29,8 +28,7 @@ parser.add_argument('-par', metavar = ('nProcesses'), type=int, default=multipro
 parser.add_argument('input', metavar = ('inputFile'), nargs='+', 
                    help='Input files. Supports Unix filename pattern matching (eg, chr*.txt or inputfiles/chr*.txt ).')
 # TODO remove
-parser.add_argument('-bnd', default='none',
-                   help='TODO REMOVE.')
+# parser.add_argument('-bnd', default='none', help='TODO REMOVE.')
 
 
 # TODO make sure everuthing works with nPrc = 1
@@ -78,6 +76,8 @@ def calcPi(observations):
         return pi
 
 pi = calcPi(observations)
+# TODO REMOVE
+'''
 if args.bnd == 'msmc':
         boundaries  = [-0.5*pi*math.log1p(-1.0*i/40.0) for i in xrange(11)]
         boundaries += [-0.5*pi*math.log1p(-1.0*i/40.0) for i in xrange(12,40,2)]
@@ -98,7 +98,7 @@ else:
                 boundaries = [b*u_vals[0] for b in N_boundaries]
                 #print boundaries
                 # exit()
-        
+'''        
 
 start = time.time()
 

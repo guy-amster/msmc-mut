@@ -137,7 +137,7 @@ class Model(HmmModel):
         
     
     # print the paramters of the models as string.
-    def printVals(self):
+    def __str__(self):
         template = '\t{0:<24}{1:<24}\n'
         res  = template.format('fixedR', self.fixedR)
         res += template.format('fixedLambda', self.fixedLambda)

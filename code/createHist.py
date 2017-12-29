@@ -3,9 +3,9 @@
 import argparse
 import sys
 import re
-from history import writeHistory
-# TODO remove?
 import numpy as np
+from CoalParams import CoalParams
+# TODO import Segments
 
 parser = argparse.ArgumentParser(description='Create hist object using ms\' and mut.py\' flags. \n ')
 
@@ -25,13 +25,10 @@ parser.add_argument('-eN', dest='eN', metavar = ('t','x'), action='append', narg
 parser.add_argument('-en', dest='en', metavar = ('t','i', 'x'), action='append', nargs=3, type=float, 
                    help='see ms\' specifications')
 
-
 # read input
 args = parser.parse_args()
 
 # parse parameters
-u_boundaries = [0.0, np.inf]
-u_vals       = [args.u]
 nSites       = args.r[1]
 _N0          = args.t/(4.0 * args.u * nSites)
 r            = args.r[0]/(4.0 * _N0 * nSites)
@@ -46,8 +43,10 @@ if args.en is not None:
         eN.append((x[0],x[2]))
 eN = sorted(eN, key=lambda x:x[0])
 
-N_vals       = [_N0] + [x[1]*_N0 for x in eN]
-N_boundaries = [0.0] + [x[0]*4*_N0 for x in eN] + [np.inf]
+_N = [_N0] + [x[1]*_N0 for x in eN]
+lmbVals = [.5/x for x in _N]
+uVals = [args.u for _ in _N]
+boundaries = [0.0] + [x[0]*4*_N0 for x in eN] + [np.inf]
 
 # print history:
-args.o.write(writeHistory(r, u_boundaries, u_vals, N_boundaries, N_vals))
+args.o.write(CoalParams(Segments(boundaries), lmbVals, uVals, r))
