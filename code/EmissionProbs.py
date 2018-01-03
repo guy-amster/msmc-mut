@@ -4,26 +4,26 @@ from SiteTypes import siteTypes
 
 class EmissionProbs(object):
     
-    def __init__(self, model, theta):
+    def __init__(self, theta):
         
-        self._model = model
+        self._theta = theta
         
         # logHomP[i] = log[ P(emitting a hom. observation | state i) ]
         logHomP = []
         S = 0.0
-        for state in xrange(model.nStates):
+        for state in xrange(theta.nStates):
             # e^res is the probability that no mutations occured between times 0 and T_state
             if state > 0:
-                S -= 2*model.segments.delta[state-1]*theta.uV[state-1]
+                S -= 2*theta.segments.delta[state-1]*theta.uVals[state-1]
             
             # Now, let t = log[ P(no mutations between time T_state and the time of coalescence | state) ]
-            t1 = -math.expm1(-model.segments.delta[state]*theta.lambdaV[state])
-            t2 = -math.expm1(-2*model.segments.delta[state]*theta.uV[state])
+            t1 = -math.expm1(-theta.segments.delta[state]*theta.lmbVals[state])
+            t2 = -math.expm1(-2*theta.segments.delta[state]*theta.uVals[state])
             t  = math.log1p(t2/t1 - t2)
-            t -= math.log1p(2*theta.uV[state]/theta.lambdaV[state])
+            t -= math.log1p(2*theta.uVals[state]/theta.lmbVals[state])
             # sanity check; given that the coalescence time is between T_state and T_(state+1)
             assert t <= 0
-            assert t >= (-2*model.segments.delta[state]*theta.uV[state])
+            assert t >= (-2*theta.segments.delta[state]*theta.uVals[state])
             
             assert (S + t) <= 0.0
             logHomP.append(S + t)
@@ -41,9 +41,9 @@ class EmissionProbs(object):
     
     # return a matrix with the emission probabilities
     def emissionMat(self):
-        res = np.zeros( (self._model.nStates, 2) )
+        res = np.zeros( (self._theta.nStates, 2) )
         
-        for i in xrange(self._model.nStates):
+        for i in xrange(self._theta.nStates):
             res[i,siteTypes.hom] = self.homProb(i)
             res[i,siteTypes.het] = self.hetProb(i)
         

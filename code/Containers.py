@@ -10,50 +10,6 @@ from Parallel import writeOutput
 # default parameter values for r, u & lambda
 DefValues = namedtuple('DefValues', 'r u lmb')
 
-# piecewise: A container class specifying fixed parameters for a piecewise function on [0,infinity):
-#            The number of segments, their sizes and boundaries.
-#            The values of the function are not specified by this class.
-class piecewise(object):
-    
-    # TODO don't take pi like that... 
-    # boundaries: segments boundaries (eg, [0,1.0,2.3,inf]).
-    def __init__(self, boundaries):
-        
-        # number of segments
-        self.n = len(boundaries) - 1
-        assert self.n > 0
-        assert boundaries[0] == 0
-        assert np.isinf(boundaries[-1])
-        for i in xrange(self.n):
-            assert boundaries[i] < boundaries[i+1]
-        
-        self.boundaries = boundaries
-        
-        '''
-        # Segments boundaties
-        # Default is based on logarithmic quantiles; e.g. -log(1-i/n) for i=0,...,n where log(0) defined as -inf
-        # self.boundaries = [-math.log1p(-1.0*i/self.n) for i in xrange(self.n)] + [np.inf]
-        self.boundaries  = [-0.5*pi*math.log1p(-1.0*i/40.0) for i in xrange(11)]
-        self.boundaries += [-0.5*pi*math.log1p(-1.0*i/40.0) for i in xrange(12,40,2)]
-        self.boundaries += [np.inf]
-        # TODO REMOVE
-        self.boundaries = [0.0, 0.00002732, 0.00010245, 0.003415, np.inf] # mu
-        self.boundaries = [0.0, 0.00000452, 0.00001695, 0.000565, np.inf]
-        assert len(self.boundaries) == (n+1)
-        '''
-        
-        # Size of segments (notice: last segment size is np.inf)
-        self.delta = np.diff(self.boundaries)
-    
-    # Find in which bin the input t falls, and return the bin's index.
-    # Bins are indexed as 0,1,...,n-1.
-    def bin(self, t):
-        assert (0.0 <= t and t < np.inf)
-        
-        ind = int(np.digitize(t, self.boundaries)) - 1
-        assert (0 <= ind and ind < self.n)
-        assert (self.boundaries[ind] <= t and t < self.boundaries[ind+1])
-        return ind
 
 # A container class specifying the fixed parameters of a HMM model
 class HmmModel(object):
@@ -64,8 +20,6 @@ class HmmModel(object):
         self.modelType  = 'basic'
         self.nStates    = nStates
         self.nEmissions = nEmissions
-
-# TODO for M>2 add a state container with members (index,timeInd,branches); Let model make the conversions index->state, (timeInd,branches)->state
 
 # model: A container class specifying all the fixed parameters of the model.
 # TODO change name...
@@ -147,22 +101,6 @@ class Model(HmmModel):
         
         return res
 
-# HmmTheta: a container class for the non-fixed parameters of an HmmModel.
-class HmmTheta(object):
-    
-    # model         : A HmmModel object specifying the fixed parameters of the model.
-    # transitionMat : The transition mtrix of the chain.
-    # initialDit    : The distribution of the first state.
-    # emissionMat   : The emission probabilities matrix.
-    def __init__(self, model, transitionMat, initialDist, emissionMat):
-        
-        assert transitionMat.shape == (model.nStates, model.nStates   )
-        assert initialDist  .shape == (model.nStates,                 )
-        assert emissionMat  .shape == (model.nStates, model.nEmissions)
-        
-        self._transitionMat = transitionMat
-        self._initialDist   = initialDist
-        self._emissionMat   = emissionMat
     
     # return the emission probabilities matrix.
     def emissionMat(self):
@@ -305,10 +243,5 @@ class Theta(HmmTheta):
         
         return cls(model, r=r, lambdaV=lambdaV, uV=uV)
     
-    # TODO Do I need this?
-    def __str__(self):
-        res  = 'lambda: ' + ','.join([str(x) for x in self.lambdaV]) + '\n'
-        res += 'u     : ' + ','.join([str(x) for x in self.uV     ]) + '\n'
-        res += 'r     : ' + str(self.r)                              + '\n'
-        return res        
+         
     

@@ -9,8 +9,8 @@ from functools import partial
 # Calculate the predicted probability of a specific subsequence seq given theta.
 # (Function defined at the module level to allow calling from pool map)
 # seq : ObservedSequence instance.
-def _calcPredictedProb(seq, model, theta):
-    return math.exp(BaumWelchExpectation(model, theta, seq).inferHiddenStates().logL)
+def _calcPredictedProb(seq, theta):
+    return math.exp(BaumWelchExpectation(theta, seq).inferHiddenStates().logL)
 
 # Calculate the observed distribution of all length-l subsequences of an observed suquence.
 # (Function defined at the module level to allow calling from pool map)

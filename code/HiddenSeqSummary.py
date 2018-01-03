@@ -22,9 +22,10 @@ class HiddenSeqSummary(object):
         
         self.length = seqLength
         
-        assert transitions.shape == (model.nStates, model.nStates)
-        assert emissions.shape   == (model.nStates, model.nEmissions)
-        assert gamma0.shape      == (model.nStates, )
+        # verify input arrays have valid dimensions
+        nStates, nEmissions = emissions.shape
+        assert transitions.shape == (nStates, nStates)
+        assert gamma0.shape == (nStates, )
         
         # log( P(O|theta) ), where theta are the parameters used for the hidden-state inference
         # (ie, theta are the parameters used for the Baum-Welch expectation step)
@@ -34,15 +35,14 @@ class HiddenSeqSummary(object):
         self.emissions   = emissions
         self.transitions = transitions 
         
+        # the following 4 arrays allow efficient calculation of Q (the target function in the BW maximization step):
+        # TODO use or remove...
         # IncFrom[i] is the proportion of transitions i->j for some j>i
         self.incFrom = np.array([np.sum(self.transitions[i,(i+1):]) for i in xrange(model.nStates)])
-        
         # DecFrom[i] is the proportion of transitions i->j for some j<i
         self.decFrom = np.array([np.sum(self.transitions[i,0:i]) for i in xrange(model.nStates)])
-        
         #   IncTo[j] is the proportion of transitions i->j for some i<j
         self.incTo   = np.array([np.sum(self.transitions[0:j,j]) for j in xrange(model.nStates)])
-        
         #   DecTo[j] is the proportion of transitions i->j for some i>j
         self.decTo   = np.array([np.sum(self.transitions[(j+1):,j]) for j in xrange(model.nStates)])
             
@@ -58,32 +58,7 @@ class HiddenSeqSummary(object):
         gammaa0         = self.gamma0      + other.gamma0
         logL            = self.logL        + other.logL
         
-        return HiddenSeqSummary(self._model, length, transitions, emissions, gammaa0, logL)
-    
-    # calculate Q(theta* | theta) (ie evaluation for EM maximization step)
-    # where theta are the parameters that were used for the creation of this HiddenSeqSummary class
-    # Q = E( log( P(hidden-state sequence Z, observations O | theta* ) ) ), where
-    #     the expactation is over the posterior distribution of Z conditioned on theta (ie ~ P(Z | O, theta) )
-    # This is all just standard EM stuff.
-    def Q(self, thetaStar):
-        
-        # standard HMM 
-        if self._model.modelType == 'basic':
-            initialDist, transitionMat = thetaStar.chainDist  ()
-            emissionMat                = thetaStar.emissionMat()
-            res  = np.sum(np.log(transitionMat) * self.transitions)
-            res += np.sum(np.log(emissionMat  ) * self.emissions  )
-            res += np.sum(np.log(initialDist  ) * self.gamma0     )
-            return res
-        
-        # our model
-        # TODO benchmark to see if this is even faster than the general case above...
-        # if not: remove likelihoods from these classes; remove incfrom etc; remove this
-        else:
-            res  = EmissionProbs  (self._model, thetaStar).logLikelihood(self)
-            res += TransitionProbs(self._model, thetaStar).logLikelihood(self)
-        
-            return res
+        return HiddenSeqSummary(length, transitions, emissions, gammaa0, logL)
     
     # Find theta* that maximizes Q(theta* | theta), initializing the maximization algorithm at theta* = theta0.
     # If theta0 = None, initialize at random.

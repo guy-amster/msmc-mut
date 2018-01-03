@@ -92,7 +92,6 @@ def _runAndCatch(f, inp):
         # re-throw e
         raise e
     
-
 # Returns the function lambda x: instance.memberName(x);
 # Note: Pool.map() only allows calling pickable functions (ie defined at top module level).
 #       This function allows to overcome this and invoke Pool.map() on class functions.

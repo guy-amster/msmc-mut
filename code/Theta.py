@@ -1,49 +1,151 @@
-from BasicHMM import HmmTheta
+import re
+import numpy as np
+from BaumWelch import HMM
 from TransitionProbs import TransitionProbs
 from EmissionProbs import EmissionProbs
-import re
 
-# TODO explain
-# theta: a container class for the non-fixed parameters of the model.
-class Theta(HmmTheta):
+# Segments: A container class specifying fixed parameters for a piecewise function on [0,infinity):
+#           The number of segments, their sizes and boundaries.
+#           The values of the function are not specified by this class.
+class Segments(object):
+    
+    # boundaries: segments boundaries (eg, [0,1.0,2.3,inf]).
+    def __init__(self, boundaries):
+        
+        # number of segments
+        self.n = len(boundaries) - 1
+        
+        # assert input values are valid
+        assert self.n > 0
+        assert boundaries[0] == 0
+        assert np.isinf(boundaries[-1])
+        for i in xrange(self.n):
+            assert boundaries[i] < boundaries[i+1]
+        
+        self.boundaries = boundaries
+        
+        # Size of segments (notice: last segment size is np.inf)
+        self.delta = np.diff(self.boundaries)
+    
+    # Find in which bin the input t falls, and return the bin's index.
+    # Bins are indexed as 0,1,...,n-1.
+    def bin(self, t):
+        
+        assert 0.0 <= t < np.inf
+        ind = int(np.digitize(t, self.boundaries)) - 1
+        assert self.boundaries[ind] <= t < self.boundaries[ind+1]
+        return ind
+
+
+# Theta: A container class specifying parameters for the coalescence and mutational processes:
+#        piecewise coalescence rates, piecewise mutation rates and recombination rate.
+#        These parametrs define a hidden Markov model (the states corresponding to the segments defined by boundaries)
+class Theta(HMM):
+    
+    # boundaries : Boundaries for the segments defining u(t) and lambda(t) as piecewise functions, e.g. [0, 1.0, 3.0, ..., inf].
+    # TODO it's possible to specify different boundaries for u and lambda here
+    # lmbVals    : Coalescence rate (lambda) values, per unit-time.
+    # uVals      : Mutation rate values per unit-time.
+    # r          : Recombination rate values per unit-time.
+    def __init__(self, boundaries, lmbVals, uVals, r):
+        
+        # Initialize Segmnets instance
+        self.segments = Segments(boundaries)
+        assert self.segments.n == len(uVals) == len(lmbVals)
+        
+        # read parameter values
+        self.lmbVals  = lmbVals
+        self.uVals    = uVals
+        self.r        = r
+        
+        # define HMM properties
+        
+        # TODO this should be a module not a class obviously
+        emissionMat = EmissionProbs(self).emissionMat
+        # TODO check for loss of performance... decide what to do & change TransProbs accordingly
+        transitionProbs = TransitionProbs(self)
+        transitionMat, initialDist = transitionProbs.transitionMat(), transitionProbs.stationaryProb()
+        HMM.__init__(self, self.segments.n, 2, transitionMat, initialDist, emissionMat)
     
     
-    # TODO model   : a Model object, containing the fixed parameters of the model.
-    # r       : scaled (TODO explain!) recombination rate.
-    # uV      : a vector of the scaled (TODO explain!) mutation rates in the different time-segments defined by the model.
-    # lambdaV : a vector of the coalescence (TODO explain!) rates in the different time-segments defined by the model.
-    # Parameters that are omitted (None) are set to the default values specified in defVals.
-    def __init__(self, model, r=None, lambdaV=None, uV=None):
+    # Scale the time-unit by a positive constant C.
+    # (r, u and N are rescaled appropriately, so that the coalescence & mutation processes are invariant to this rescaling ).
+    # Return value: a Theta instance with the scaled values
+    def scale(self, C):
         
-        # Scaled recombination rate r.
-        if r is None:
-            self.r = model.defVals.r
-        else:
-            self.r = r
+        assert C > 0
         
-        # Piecewise coalescense rates.
-        if lambdaV is None:
-            self.lambdaV = [model.defVals.lmb for _ in xrange(model.segments.n)]
-        else:
-            assert len(lambdaV) == model.segments.n
-            self.lambdaV = lambdaV
+        # calculate scaled values
+        r = self.r*C
+        uVals = [x*C for x in self.uVals]
+        lmbVals  = [x*C for x in self.lmbVals]
+        boundaries = [x/C for x in self.segments.boundaries]
         
-        # Piecewise mutation rates.
-        if uV is None:
-            self.uV = [model.defVals.u for _ in xrange(model.segments.n)]
-        else:
-            assert len(uV) == model.segments.n
-            self.uV = uV
-        
-        self._model = model
+        # return scaled instance
+        return CoalParams(boundaries, lmbVals, uVals, r)
     
-    # return the emission probabilities matrix.
-    def emissionMat(self):
+            
+    # Serialize class to human-readable string 
+    def __str__(self):
         
-        return EmissionProbs(self._model,self).emissionMat()
+        self._assertValidValues()
+        res = '{0:<32}{1:<24}\n\n'.format('recombination rate:',self.r)
+        res += 'Mutation & coalescence rate histories:\n'
+        template = '\t{0:<24}{1:<24}{2:<24}{3:<24}\n'
+        res += template.format('t_start', 't_end', 'coalescence rate', 'mutation rate')
+        for i in xrange(self.segments.n):    
+            res += template.format(self.segments.boundaries[i], self.segments.boundaries[i+1], self.lmbVals[i], self.uVals[i])
+        return res
     
-    # return the initial distribution of the chain, and the transition probabilities matrix.
-    def chainDist(self):
+    
+    # Deserialize class from string
+    @classmethod
+    def fromString(cls, inp):
         
-        transitionProbs = TransitionProbs(self._model,self)
-        return transitionProbs.stationaryProb(), transitionProbs.transitionMat()
+        # define format pattern
+        pattern = re.compile(r"""
+                                 ^
+                                  recombination\ rate:\ +(?P<r>.+)\n\n      # recombination rate
+                                  .+\n\t.+\n                                # table headers
+                                  (?P<tab>(\t.+\n)+)                        # table
+                                 $
+                              """, re.VERBOSE)
+        # match input to pattern
+        match = pattern.search(inp)
+        assert match is not None
+        
+        # parse recombintion rate
+        r = float(match.group("r"))
+        
+        # parse mutation & coalescence rates line by line
+        boundaries, lmbVals, uVals = [], [], []
+        tEndPrevious               = 0.0
+        for line in match.group("tab").split('\n')[:-1]:
+            
+            tStart, tEnd, lmb, u = map(float, re.findall(r"([-|\w|\+|\.]+)", line))
+            assert tStart == tEndPrevious
+            tEndPrevious = tEnd
+            
+            boundaries.append(t_start)
+            lmbVals.append(lmb)
+            uVals.append(u)
+        
+        boundaries.append(tEnd)    
+        res = cls(Segments(boundaries), lmbVals, uVals, r)
+        res._assertValidValues()
+        return res
+    
+    
+    # Sanity check: verify all values are valid
+    def _assertValidValues(self):
+        for val in self.lmbVals + self.uVals + [self.r]:
+            assert 0 < val < np.inf
+        assert self.segments.boundaries[0] == 0.0
+        for i in xrange(0,len(self.segments.boundaries)-1):
+            assert self.segments.boundaries[i] < self.segments.boundaries[i+1]
+        assert np.isinf(self.segments.boundaries[-1])
+        assert self.segments.n == len(self.uVals) == len(self.lmbVals)
+        
+
+
+    
