@@ -20,14 +20,14 @@ parser.add_argument('-sr', dest='sr', metavar = ('r'), type=float,
 args = parser.parse_args()
 
 # read iteration from loop file
-_, params, _ = readLoop(args.filename)
-coalParams = iterations[args.iter]
+_, thetas, _ = readLoop(args.filename)
+theta = thetas[args.iter]
 
 # scale, if requested
 if args.su is not None:
-    coalParams.rescale(args.su/coalParams.uVals[0])
+    theta = theta.scale(args.su/theta.uVals[0])
 if args.sr is not None:
-    coalParams.rescale(args.sr/coalParams.r)
+    theta = theta.rescale(args.sr/theta.r)
     
 # write as output
-args.o.write(coalParams)
+args.o.write(str(theta))

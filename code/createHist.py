@@ -4,7 +4,7 @@ import argparse
 import sys
 import re
 import numpy as np
-from CoalParams import CoalParams
+from Theta import Theta
 # TODO import Segments
 
 parser = argparse.ArgumentParser(description='Create hist object using ms\' and mut.py\' flags. \n ')
@@ -49,4 +49,4 @@ uVals = [args.u for _ in _N]
 boundaries = [0.0] + [x[0]*4*_N0 for x in eN] + [np.inf]
 
 # print history:
-args.o.write(CoalParams(Segments(boundaries), lmbVals, uVals, r))
+args.o.write(str(Theta(boundaries, lmbVals, uVals, r, calcHmm=False)))

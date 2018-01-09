@@ -56,6 +56,7 @@ def initParallel(nPrc, outputPrefix):
 # Write output messages to file.
 def writeOutput(line, filename = 'Log'):
     
+    line = str(line)
     originProcess = mp.current_process().name
     
     if _nPrc == 1:

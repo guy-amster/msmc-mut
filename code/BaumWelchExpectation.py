@@ -1,6 +1,56 @@
 import numpy as np
 from scipy import linalg as LA
-from HiddenSeqSummary import HiddenSeqSummary
+
+# This container class stores the results of the forward-backward algorithm.
+# It contains summary statistics (NOT entire sequence) on the inferred hidden-state sequence.
+# seqLength     : Underlying suequence length.
+# transitions   : ndarray. transitions[i,j] is the inferred number of transitions i->j
+# emissions     : ndarray. emissions[i,j] is the inferred number of emissions i->j
+# gamma0        : the posterior distribution of states at the beginning of the sequence
+# logLikelihood : the log-l of the hidden & observed sequence.
+class HiddenSeqSummary(object):
+    
+    def __init__(self, seqLength, transitions, emissions, gamma0, logLikelihood):
+        
+        self.length = seqLength
+        
+        # verify input arrays have valid dimensions
+        nStates, nEmissions = emissions.shape
+        assert transitions.shape == (nStates, nStates)
+        assert gamma0.shape == (nStates, )
+        
+        # log( P(O|theta) ), where theta are the parameters used for the hidden-state inference
+        # (ie, theta are the parameters used for the Baum-Welch expectation step)
+        self.logL = logLikelihood
+        
+        self.gamma0      = gamma0
+        self.emissions   = emissions
+        self.transitions = transitions 
+        
+        # the following 4 arrays allow efficient calculation of Q (the target function in the BW maximization step):
+        # TODO use or remove...
+        # IncFrom[i] is the proportion of transitions i->j for some j>i
+        self.incFrom = np.array([np.sum(self.transitions[i,(i+1):]) for i in xrange(nStates)])
+        # DecFrom[i] is the proportion of transitions i->j for some j<i
+        self.decFrom = np.array([np.sum(self.transitions[i,0:i]) for i in xrange(nStates)])
+        #   IncTo[j] is the proportion of transitions i->j for some i<j
+        self.incTo   = np.array([np.sum(self.transitions[0:j,j]) for j in xrange(nStates)])
+        #   DecTo[j] is the proportion of transitions i->j for some i>j
+        self.decTo   = np.array([np.sum(self.transitions[(j+1):,j]) for j in xrange(nStates)])
+            
+    # Combine two classes to one (ie calculate the combined statistics on both sequences)
+    def __add__(self, other):
+        
+        assert self.transitions.shape == other.transitions.shape
+        assert self.emissions.shape   == other.emissions.shape
+        
+        length          = self.length      + other.length
+        transitions     = self.transitions + other.transitions
+        emissions       = self.emissions   + other.emissions
+        gammaa0         = self.gamma0      + other.gamma0
+        logL            = self.logL        + other.logL
+        
+        return HiddenSeqSummary(length, transitions, emissions, gammaa0, logL)
 
 # This class implements the expectation step of the BW algorithm (ie the forward-backward algorithm)
 class BaumWelchExpectation(object):
@@ -13,8 +63,9 @@ class BaumWelchExpectation(object):
         # TODO reference theta instead? the entire hmm structure is duplicated here... depends on how I implement theta()
         self._nStates = theta.nStates
         self._nEmissions = theta.nEmissions
-        self._initialDist, self._transitionMat = theta.chainDist  ()
-        self._emissionMat                      = theta.emissionMat()
+        self._initialDist = theta.initialDist
+        self._transitionMat = theta.transitionMat
+        self._emissionMat = theta.emissionMat
         
         self._run   = False
         
@@ -44,7 +95,7 @@ class BaumWelchExpectation(object):
             
         # initilize ndarray for forward variables
         # forward variables are calculated & stored for the positions in self._obs.positions
-        self._alpha = np.empty( (self._obs.nPositions, self_nStates), dtype=np.float64 )
+        self._alpha = np.empty( (self._obs.nPositions, self._nStates), dtype=np.float64 )
         
         # initilize alpha_0 (alpha_0 (i) = pi_i * b_i(O_0) )
         self._alpha[0,:]  = self._initialDist * self._emissionMat[:,self._obs.posTypes[0]]
@@ -82,18 +133,18 @@ class BaumWelchExpectation(object):
         mats = self._calcBackwardMats()
         
         # initialize beta_(L-1) (beta_(L-1) (i) = 1.0 )
-        beta = np.ones( self_nStates, dtype=np.float64 )
+        beta = np.ones( self._nStates, dtype=np.float64 )
         
         # allocate ndarray for temporary variables
-        tmpVec = np.empty(  self_nStates,                       dtype=np.float64 )
-        tmpMat = np.empty( (self_nStates, self_nStates), dtype=np.float64 )
+        tmpVec = np.empty(  self._nStates,                       dtype=np.float64 )
+        tmpMat = np.empty( (self._nStates, self._nStates), dtype=np.float64 )
         
         # initialize window histogram;
         # windowH[j,d-1] coressponds to windows [O_t, ..., O_t+d] where:
         #    - We don't assume anything about O_t
         #    - O_(t+1) = ... = O_(t+d-1) = 0.
         #    - O_(t+d) = j
-        windowH = np.zeros( (self_nEmissions, self._obs.maxDistance, self_nStates, self_nStates) , dtype=np.float64 )
+        windowH = np.zeros( (self._nEmissions, self._obs.maxDistance, self._nStates, self._nStates) , dtype=np.float64 )
         
         # move backwards window by window 
         for ind in xrange(self._obs.nPositions - 2, -1, -1):
@@ -117,8 +168,8 @@ class BaumWelchExpectation(object):
             beta /= np.sum(beta)
         
         # initialize result arrays
-        resTransitions = np.zeros( (self_nStates, self_nStates   ), dtype=np.float64 )
-        resEmissions   = np.zeros( (self_nStates, self_nEmissions), dtype=np.float64 )
+        resTransitions = np.zeros( (self._nStates, self._nStates   ), dtype=np.float64 )
+        resEmissions   = np.zeros( (self._nStates, self._nEmissions), dtype=np.float64 )
         
         # Handle emmision from fisrt bp separately... gamma[0] = alpha[0]*beta[0]
         gammaZero  = beta * self._alpha[0,:]
@@ -128,7 +179,7 @@ class BaumWelchExpectation(object):
         # The following section of the code
         # (Specifically: windowH[0, d-1, :, :] /= mats[0, d-1, :, :])
         # assumes that the matrices mats[j,d-1,:,:] don't have zero entries.
-        assert np.count_nonzero(mats) == (self_nEmissions * self._obs.maxDistance * self_nStates * self_nStates)
+        assert np.count_nonzero(mats) == (self._nEmissions * self._obs.maxDistance * self._nStates * self._nStates)
         
         # parse the window histogram from largest to smallest
         for d in xrange(self._obs.maxDistance, 0, -1):
@@ -139,7 +190,7 @@ class BaumWelchExpectation(object):
             # we now parse all windows windowH[:, d]
             
             # first, handle emissions from the last pb in the window
-            for outputType in xrange(self_nEmissions):
+            for outputType in xrange(self._nEmissions):
                 
                 # consider window windowH[outputType, d]
                 # to get the posterior state probabilities in the last bp, sum over columns
@@ -151,7 +202,7 @@ class BaumWelchExpectation(object):
             
             # now, handle transitions:
             # aggregate all windows of type [*,d] to single bin (type only mattered for emissions)
-            for outputType in xrange(1,self_nEmissions):
+            for outputType in xrange(1,self._nEmissions):
                 windowH[0, d-1, :, :] += windowH[outputType, d-1, :, :]
             
             # window-size d is now aggregated in windowH[0, d].
@@ -187,13 +238,13 @@ class BaumWelchExpectation(object):
     # calc forward auxiliary mats
     def _calcForwardMats(self):
         # TODO am I missing a high precision float by choosing float64?
-        mats   = np.empty( (self_nEmissions, self._obs.maxDistance, self_nStates, self_nStates) , dtype=np.float64 )
-        scales = np.empty( (self_nEmissions, self._obs.maxDistance) , dtype=np.float64 )
+        mats   = np.empty( (self._nEmissions, self._obs.maxDistance, self._nStates, self._nStates) , dtype=np.float64 )
+        scales = np.empty( (self._nEmissions, self._obs.maxDistance) , dtype=np.float64 )
         
         # initilize mats for d = 1 (i.e. advancing one base pair)
-        for outputType in xrange(self_nEmissions):
-            for i in xrange(self_nStates):
-                for j in xrange(self_nStates):
+        for outputType in xrange(self._nEmissions):
+            for i in xrange(self._nStates):
+                for j in xrange(self._nStates):
                     # recurrence formula: alpha_(t+1)(j) = sum_i {alpha_t(i) * a_ij * b_j(O_t)}
                     mats[outputType, 0, i, j] = self._transitionMat[j,i] * self._emissionMat[i,outputType]
             
@@ -206,7 +257,7 @@ class BaumWelchExpectation(object):
         # if the last output is 0, notice mats[0,d-1] = mats[0,0] ^ d
         self._powerArray(mats[0, :, :, :], scales[0,:])
         # otherwise, mats[type,d-1] = mats[type,0] * mats[0,d-2]
-        for outputType in xrange(1,self_nEmissions):
+        for outputType in xrange(1,self._nEmissions):
             for d in xrange(2, self._obs.maxDistance + 1):
                 np.dot(mats[outputType, 0, :, :], mats[0, d-2, :, :], out=mats[outputType, d-1, :, :])
         
@@ -222,7 +273,7 @@ class BaumWelchExpectation(object):
     # transpose self._mats
     def _calcBackwardMats(self):
         assert self._matStatus == 'forward'
-        for outputType in xrange(self_nEmissions):
+        for outputType in xrange(self._nEmissions):
             for d in xrange(1, self._obs.maxDistance + 1):
                 self._mats[outputType, d-1, :, :] = self._mats[outputType, d-1, :, :].T.copy()
                 self._mats[outputType, d-1, :, :] /= LA.norm(self._mats[outputType, d-1, :, :],ord=1)

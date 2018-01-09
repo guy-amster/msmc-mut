@@ -2,10 +2,8 @@ import itertools # TODO remove
 import time
 import numpy as np
 from BaumWelchExpectation import BaumWelchExpectation
-from ObservedSequence import ObservedSequence
-from Parallel import writeOutput, runParallel
+from Parallel import writeOutput, runParallel, runMemberFunc
 from GOF import GOF
-from functools import partial
 
 # HMM: a container class specifying a hidden Markov model.
 class HMM(object):
@@ -17,8 +15,8 @@ class HMM(object):
     # emissionMat   : The emission probabilities matrix.
     def __init__(self, nStates, nEmissions, transitionMat, initialDist, emissionMat):
         
-        assert transitionMat.shape == (nStates, nStates)
-        assert initialDist  .shape == (nStates)
+        assert transitionMat.shape == (nStates, nStates   )
+        assert initialDist  .shape == (nStates,           )
         assert emissionMat  .shape == (nStates, nEmissions)
         
         self.nStates       = nStates
@@ -44,7 +42,7 @@ class BaumWelch(object):
     
     # nStates       : Number of hidden states.
     # nEmissions:   : Number of possible observations (not chain length, but the 'alphabet' length).
-    def __init__(nStates, nEmissions):
+    def __init__(self, nStates, nEmissions):
         self.nStates = nStates
         self.nEmissions = nEmissions
     
@@ -60,6 +58,8 @@ class BaumWelch(object):
         theta = initTheta
         if theta is None:
             theta = self._initTheta(observations)
+        #TODO
+        DBGME = [theta]
                 
         # we expect the log likelihood at the next iteration to be higher than this        
         bound = -np.inf
@@ -96,7 +96,7 @@ class BaumWelch(object):
             # BW expectation step
             start = time.time()
             inferredHiddenState = self._parallelExp(theta, observations)
-            writeOutput('finshed BW exp step within %f seconds'%(time.time()-start))
+            writeOutput('finished BW exp step within %f seconds'%(time.time()-start))
             
             # sanity check: log(O|theta) has increased as expected in the last iteration
             if inferredHiddenState.logL < bound:
@@ -109,8 +109,8 @@ class BaumWelch(object):
 
             # maximization step
             start = time.time()
-            newTheta, Qmax = self._maximizeQ(inferredHiddenState, theta)
-            writeOutput('finshed BW max step within %f seconds'%(time.time()-start))
+            newTheta, Qmax = self._maximizeQ(inferredHiddenState, DBGME)
+            writeOutput('finished BW max step within %f seconds'%(time.time()-start))
 
             # sanity check: max_thetaStar Q(thetaStar | theta) >= Q(theta | theta)
             qDiff = Qmax - Qtheta
@@ -132,6 +132,7 @@ class BaumWelch(object):
 
             # update theta
             theta = newTheta
+            DBGME.append(theta)
                                 
         # log final value of theta (for which some statistics are not calculated)
         self._logVals('After %d iterations:'%nIterations, theta, ['.', '.', '.'], gof)
@@ -152,9 +153,9 @@ class BaumWelch(object):
     
     # calculate theta* that maximizes Q (ie EM maximization step).
     # returns (theta*, attained maximum value).
-    # here we use the closed form for the global maximum (so initTheta is ignored); in the derived class we use initTheta
+    # here we use the closed form for the global maximum (so initThetas is ignored); in the derived class we use initTheta
     # TODO nStartPoints 290?
-    def _maximizeQ(self, hiddenState, initTheta):
+    def _maximizeQ(self, hiddenState, initThetas):
         transitions = np.empty( (self.nStates, self.nStates) )
         for i in xrange(self.nStates):
             transitions[i,:] = hiddenState.transitions[i, :] / np.sum(hiddenState.transitions[i, :])
@@ -208,7 +209,7 @@ class BaumWelch(object):
         assert len(self._statsNames) == len(stats)
 
         temp = '\t'
-        for i in xrange(len(statsNames)):
+        for i in xrange(len(self._statsNames)):
                 temp += '{%d:<24}'%i
         writeOutput('Statistics:',target)
         writeOutput(temp.format(*self._statsNames),target)
@@ -228,133 +229,6 @@ class BaumWelch(object):
         
         return HMM(self.nStates, self.nEmissions, transitionMat, initialDist, emissionMat)
     
-# TODO name
-class MSMCU(BaumWelch):
-    
-    # lmbPattern : [0,1,2] stands for 3 segments with independent coal. rates; [0,0,1] stand for 3 segments, where the first two have equal coal. rates.
-    # uPattern   : same for mutation rate (e.g. [0,0,...,0] assumes fixed mutation rate; [0,1,2,...] assumes independent mutation rates)
-    # scale      : either '2N0', 'u0' or 'r'. Sets the unit by which results are scaled (e.g. 'u0' sets u0 to 1.0).
-    #              (Note you can scale by any parameter; e.g. uPattern = [1,0,2,...] and scaleBy = 'u0' would scale by the mutation rate in the second interval)
-    def __init__(self, lmbPattern, uPattern, scale):
-        
-        # verify that exactly one is set to true
-        assert scale in ['2N0', 'u0', 'r']
-        
-        # verify input validity
-        nStates = len(lmbPattern)
-        assert nStates == len(uPattern)
-        for pattern in [lmbPattern, uPattern]:
-            for i in xrange(len(set(pattern))):
-                assert i in pattern
-        
-        self._scale      = scale
-        self._lmbPattern = lmbPattern
-        self._uPattern   = uPattern
-        BaumWelch.__init__(nStates, 2)
-        
-        # number of parameters (accounting for pattern) and free parameters (also accounting for scale)
-        self._nParamsLmb     = len(set(lmbPattern))
-        self._nParamsU       = len(set(uPattern  ))
-        self._nFreeParamsLmb = self._nParamsLmb - (scale == '2N0')
-        self._nFreeParamsU   = self._nParamsU   - (scale == 'u0' )
-        self._nFreeParamsR   = 1                - (scale == 'r'  )
-        
-        # total number of free parameters
-        self._nFreeParams = self._nParamsLmb + self._nParamsU
-        
-        # inverse pattern
-        self._uInvPattern   = [  uPattern.index(v) for v in xrange(self._nFreeParamsU  )]
-        self._lmbInvPattern = [lmbPattern.index(v) for v in xrange(self._nFreeParamsLmb)]
-    
-    def _maximizeQ(self, hiddenState, initTheta):
-        pass #B
-    
-    # Describe __init__ flags in string
-    def __str__(self):
-        template = '\t{0:<24}{1}\n'
-        lmbPattern, uPattern, scale
-        res  = template.format('lmbPattern', self._lmbPattern)
-        res += template.format('uPattern', self._uPattern)
-        res += template.format('scale', self._scale)
-        
-        return res
-    
-    # Construct class from string
-    @classmethod
-    def fromString(cls, inp):
-        # TODO
-        return cls(lmbPattern, uPattern, scale)
-    
-    # we initialize the Baum-Welch algorithm with a population of fixed size N, fixed mutation rate u and recombination rate r = u.
-    # we choose N and u such that 4Nu = pi. 
-    def _initTheta(self, observations):
-        
-        # calculate pi
-        # TODO support missing sites, different site types etc
-        het, length = 0, 0
-        for obs in observations:
-                length += obs.length
-                het    += np.count_nonzero(obs.posTypes)
-        pi = float(het)/float(length)
-        
-        # determine u, r, lmb in scaled units
-        # (we assume r=u, and notice pi = 4Nu = 2u/lmb)
-        if self._scale == '2N0':
-            u, r, lmb = pi/2, pi/2, 1.0
-        else:
-            u, r, lmb = 1.0, 1.0, 2/pi
-        
-        # create vector
-        vec = [u]*self._nFreeParamsU + [lmb]*self._nFreeParamsLmb + [r]*self._nFreeParamsR
-        
-        # translate to Theta
-        return self._vecToTheta(np.log(vec))
-    
-    # expand a vector of unconstrained parameters to a Theta instance.
-    # vec = log(u_0), ..., log(u_(nFreeParamsU-1)) || log(lambda_0), ..., log(lambda_(nFreeParamsLmb-1)) || log(r).
-    # the scale parameter (u0, r or N0) is missing from the vector.
-    def _vecToTheta(self, vec):
-        
-        assert len(vec) == self._nFreeParams
-        
-        # take exponent
-        vec = np.exp(vec)
-        
-        # extract free parameters and add constant scale parameter
-        uVec   =  [1.0][:self._scale == 'u0' ] + vec[:self._nFreeParamsU]
-        lmbVec =  [1.0][:self._scale == '2N0'] + vec[self._nFreeParamsU:self._nFreeParamsU+self._nFreeParamsLmb]
-        r      = ([1.0][:self._scale == 'r'  ] + vec[self._nFreeParamsU+self._nFreeParamsLmb:])[0]
-        
-        # calculate values based on patterns
-        uVals   = [  uVec[self.  _uPattern[i]] for i in self.nStates]
-        lmbVals = [lmbVec[self._lmbPattern[i]] for i in self.nStates]
-        
-        # boundaries are chosen such that the probability of coalescence at state i is 1/nStates
-        boundaries = np.zeros(self.nStates + 1)
-        for i in xrange(self.nStates - 1):
-            delta = -math.log1p(-1.0/(self.nStates - i)) / lmbVals[i]
-            boundaries[i+1] = boundaries[i] + delta
-        boundaries[-1] = np.inf
-        
-        writeOutput(Theta(boundaries, lmbVals, uVals, r).initialDist, "DBG")
-        return Theta(boundaries, lmbVals, uVals, r)
-    
-    # shrink a theta instance generated by _vecToTheta back to vector of free parameters 
-    # (this is a left inverse function to _vecToTheta;
-    #  we do not verify input validity: if theta isn't in the range of _vecToTheta, e.g. is not scaled, has other boundaries,
-    #  or doesn't follow the pattern, we won't raise an exception).
-    def _thetaToVec(self, theta):
-        
-        # 'shrink' vectors based on patterns, also removing the scale parameter
-        u   = [theta.uVals[self._uInvPattern  [i]] for i in xrange(self._scale == 'u0' , self._nParamsU      )]
-        lmb = [theta.uVals[self._lmvInvPattern[i]] for i in xrange(self._scale == '2N0', self._nParamsLmb    )]
-        r   = [theta.r][self._scale == 'r' :]
-        
-        # concatenate values
-        vec = np.append(u, np.append(lmb ,r))
-        
-        # take log and return
-        return np.log(vec)
 
 
 # TODO MOVE OR REMOVE

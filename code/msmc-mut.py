@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from Containers import Model
+from Model import Model
 from ObservedSequence import ObservedSequence
 from BaumWelch import BaumWelch
 from Parallel import initParallel, runParallel, runMemberFunc, writeOutput, OutputWriter
@@ -10,6 +10,8 @@ import fnmatch
 import argparse
 import multiprocessing
 import time
+# TODO remove
+from Theta import Theta
 
 # specify flags & usage
 parser = argparse.ArgumentParser(description='Infer population size and mutation rate histories. \n ')
@@ -60,6 +62,7 @@ for inpPattern in args.input:
 
 # TODO proper error message if (a) file doesn't exist (b) file doesn't match format
 # read all input files (executed in parallel)
+assert len(files) > 0
 observations = runParallel(runMemberFunc(ObservedSequence, 'fromFile'), files)
 
 writeOutput('read %d input files (%s)'%(len(files), ','.join(files)))
@@ -102,13 +105,36 @@ else:
 
 start = time.time()
 
-model = Model(pi, boundaries, fixedR=(not args.fixedMu), fixedLambda=False, fixedMu=args.fixedMu)
+# TODO remove?
+# calculate pi
+# TODO support missing sites, different site types etc
+het, length = 0, 0
+for obs in observations:
+        length += obs.length
+        het    += np.count_nonzero(obs.posTypes)
+pi = float(het)/float(length)
+
+# calculate fixed boundaries...
+bounds = [0.1*np.exp(float(i)/64.0*np.log(151))-0.1 for i in xrange(65)] + [np.inf]
+dummyTheta = Theta(bounds, [1.0]*65, [pi/2.0]*65, pi/2.0, calcHmm=False)
+bounds = dummyTheta.scale(2.0/pi, False).segments.boundaries
+
+# TODO flags, pattern etc ...
+t = [4]+[2]*25+[4]+[7]
+lmbPattern = []
+# TODO indentation is somehow 4 spaces some places and 8 in others
+for i in xrange(28):
+        for _ in xrange(t[i]):
+                lmbPattern.append(i)
+        
+uPattern = [0]*65
+scale = 'u0'
+model = Model(lmbPattern, uPattern, scale, fixedBoundaries = bounds)
 if args.gof is not None:
         gof = args.gof
 else:
         gof = []
-
-BaumWelch(model, observations, nIterations=args.iter, gof=gof)
+model.run(observations, args.iter)
 
 # TODO direct stderr and stdout also to files???        
 writeOutput('Done (overall execution time: %f minutes).'%((time.time()-start)/60))
