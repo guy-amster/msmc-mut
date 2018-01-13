@@ -64,13 +64,16 @@ class Model(BaumWelch):
         nStartPoints = 60
         
         # TODO remove
+        # -Q is a positive measure we're trying to minimize... 
         refs = [-self._Q(t, hiddenState) for t in initThetas]
+        for r in refs :
+            assert r > 0
         
         # TODO move 'initTheta' to class field and see if it screws up performance.
         # initial points for optimizer; None is later converted to random init point
-        inputs = [self._thetaToVec(theta) for theta in initThetas] + [None for _ in xrange(nStartPoints - len(initThetas))]
-        inputs = [self._thetaToVec(theta) for theta in initThetas]
-        inputs = [(x0, hiddenState) for x0 in inputs]
+        # inputs = [self._thetaToVec(theta) for theta in initThetas] + [None for _ in xrange(nStartPoints - len(initThetas))]
+        # inputs = [(x0, hiddenState) for x0 in inputs]
+        inputs = [(self._thetaToVec(theta), hiddenState) for theta in [initThetas[0], initThetas[-1]]]
         
         # run self._maxQSingleStartPoint() on all items in inputs
         # Note: using partial(runMemberFunc, ...) to overcome Pool.map limitations on class methods.
@@ -83,11 +86,13 @@ class Model(BaumWelch):
             if val > maxFound:
                 maxFound = val
                 maxTheta = theta
+            
+            assert val < 0.0
             indices.append('{0}:{1}'.format(i, -val/refs[-1]))
         
         # TODO remove
-        writeOutput('reference vals: ' + ','.join([str(r/refs[-1]) for r in refs]), filename = 'DBG')
-        writeOutput('indices: ' + ','.join(ss.rankdata(indices)), filename = 'DBG')
+        writeOutput('reference vals: ' + ','.join(str(r/refs[-1]) for r in refs), filename = 'DBG')
+        writeOutput('indices: ' + ','.join(str(v) for v in ss.rankdata(indices)), filename = 'DBG')
     
         return maxTheta, maxFound
     

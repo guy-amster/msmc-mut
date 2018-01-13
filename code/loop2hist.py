@@ -13,6 +13,8 @@ parser.add_argument('-iter', dest='iter', metavar = ('n'), default=-1, type=int,
                    help='Read parameters after the end of the nth iteration (default: last iteration)')
 parser.add_argument('-su', dest='su', metavar = ('u'), type=float,
                     help='Scale parameters such that the mutation rate at time 0 will equal u')
+parser.add_argument('-sn', dest='sn', metavar = ('N'), type=float,
+                    help='Scale parameters such that the population size at time 0 will equal N')
 parser.add_argument('-sr', dest='sr', metavar = ('r'), type=float,
                     help='Scale parameters such that the recombination rate will equal r')
 
@@ -25,9 +27,12 @@ theta = thetas[args.iter]
 
 # scale, if requested
 if args.su is not None:
-    theta = theta.scale(args.su/theta.uVals[0])
+    theta = theta.scale(args.su/theta.uVals[0], calcHmm=False)
+if args.sn is not None:
+    targetLmb0 = 0.5/args.sn
+    theta = theta.scale(targetLmb0/theta.lmbVals[0], calcHmm=False)
 if args.sr is not None:
-    theta = theta.rescale(args.sr/theta.r)
+    theta = theta.rescale(args.sr/theta.r, calcHmm=False)
     
 # write as output
 args.o.write(str(theta))
