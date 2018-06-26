@@ -1,7 +1,13 @@
+sim-sets/
+sim-sets/*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
+
+#gulu stuff
+*.DS_Store
 
 # C extensions
 *.so
