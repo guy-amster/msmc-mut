@@ -83,11 +83,15 @@ class BaumWelch(object):
         # print the log-likelihood of the data under the true parameters (if given; simulated data only)
         if trueTheta is not None:
             
+            writeOutput('calculating sequence likelihood under true parameters...')
+            
             # use the forward-backward algorithm to calculate the log-lokelihood of the observed sequence under trueTheta
+            start = time.time()
             trueL = self._parallelExp(trueTheta, observations).logL
+            writeOutput('finished calculation within %f seconds'%(time.time()-start))
             
             # log True theta vals and statistics
-            self._logVals('True parameters:', trueTheta, [trueL, '.', '.'], gof, target='DBG')
+            self._logVals('True parameters:', trueTheta, [trueL, '.', '.'], gof)
                 
         for i in xrange(nIterations):
                 

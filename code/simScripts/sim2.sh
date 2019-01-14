@@ -30,7 +30,7 @@ awk '{$1= ""; $2 = ""; $3 = ""; sub("-l",""); print $0}')
 # extract results from MSMC
 
 # run my program
-msmc-mut.py -fixedMu -iter 20 -bnd psmc.hist simData/chr*.msmc
+msmc-mut.py -fixedMu -iter 20 simData/chr*.msmc
 
 # extract results from my program
 loop2hist.py -o msmc_u.hist -su 0.000000025

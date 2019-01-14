@@ -22,17 +22,16 @@ parser.add_argument('-sr', dest='sr', metavar = ('r'), type=float,
 args = parser.parse_args()
 
 # read iteration from loop file
-_, thetas, _ = readLoop(args.filename)
-theta = thetas[args.iter]
+_, iterations, _, _ = readLoop(args.filename)
+theta, _ = iterations[args.iter]
 
 # scale, if requested
 if args.su is not None:
-    theta = theta.scale(args.su/theta.uVals[0], calcHmm=False)
+    theta = theta.scale('u0', args.su)
 if args.sn is not None:
-    targetLmb0 = 0.5/args.sn
-    theta = theta.scale(targetLmb0/theta.lmbVals[0], calcHmm=False)
+    theta = theta.scale('2N0', 2.0*args.sn)
 if args.sr is not None:
-    theta = theta.rescale(args.sr/theta.r, calcHmm=False)
+    theta = theta.scale('r', args.sr)
     
 # write as output
 args.o.write(str(theta))

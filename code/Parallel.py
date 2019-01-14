@@ -59,6 +59,7 @@ def writeOutput(line, filename = 'Log'):
     line = str(line)
     originProcess = mp.current_process().name
     
+    # TODO I don't understand, if nPrc > 1. how _nPrc is defined in child processes, what did I do here?
     if _nPrc == 1:
         _outputWriter.write(line, filename, originProcess)
     

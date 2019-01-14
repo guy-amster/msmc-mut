@@ -163,6 +163,10 @@ class TransitionProbs(object):
         
         self._diagonal = dict()
         
+        if self._theta.nStates == 1:
+            self._diagonal[0] = 0.0
+            return
+        
         # marginalInc_i = sum_(j>i)e^IncTo[j]
         # marginalDec_i = sum_(j<i)e^DecTo[j]
         marginalInc, marginalDec = dict(), dict()

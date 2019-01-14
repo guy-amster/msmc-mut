@@ -35,6 +35,8 @@ parser.add_argument('-psmcSegs', action='store_true',
                     help='#TODO')
 parser.add_argument('-msmcSegs', action='store_true',
                     help='#TODO')
+parser.add_argument('-quantSegs', action='store_true',
+                    help='#TODO')
 parser.add_argument('-finerMsmcSegs', action='store_true',
                     help='#TODO')
 parser.add_argument('-fixedMu', action='store_true',
@@ -74,6 +76,7 @@ writeOutput(" ".join(sys.argv))
 writeOutput('BW steps will be spanned over %d processes'%args.par)
 
 # read input dir & match all input files...
+# TODO this is actually handled by the shell; if you pass string as is ('...') than the code below DOESNT WORK
 files = []
 for inpPattern in args.input:
         pathName   = os.path.dirname(inpPattern)
@@ -95,15 +98,21 @@ writeOutput('read %d input files (%s)'%(len(files), ','.join(files)))
 if args.psmcSegs:
         t = [4]+[2]*25+[4]+[7]
         bounds = [0.1*np.exp(float(i)/64.0*np.log(151))-0.1 for i in xrange(65)] + [np.inf]
+        nSegs = len(bounds) - 1
 elif args.finerMsmcSegs:
-        bounds = [-np.log1p(-i/100.0) for i in xrange(100)] + [np.inf]
-        t = [4]*25
-else:
-        assert args.msmcSegs
+        bounds = [-np.log1p(-i/104.0) for i in xrange(104)] + [np.inf]
+        t = [8]*13
+        nSegs = len(bounds) - 1
+elif args.msmcSegs:
+        nSegs = len(bounds) - 1
         t = [1]*10 + [2]*15
         bounds = [-np.log1p(-i/40.0) for i in xrange(40)] + [np.inf]
+else:
+        assert args.quantSegs
+        nSegs = 100
+        bounds = None
+        t = [4]*25
 
-nSegs = len(bounds) - 1
 pattern = []
 for i in xrange(len(t)):
         for _ in xrange(t[i]):
@@ -114,8 +123,9 @@ dummpyPattern = [0]*nSegs
 if args.fixedMu:
         uPattern, lmbPattern = dummpyPattern, pattern
         scale = 'u0'
-        pi = calcPi(observations)
-        bounds = Theta(bounds, [1.0]*nSegs, [pi/2.0]*nSegs, pi/2.0, calcHmm=False).scale(2.0/pi, False).segments.boundaries
+        if bounds is not None:
+                pi = calcPi(observations)
+                bounds = Theta(bounds, [1.0]*nSegs, [pi/2.0]*nSegs, pi/2.0).scale(scale, 1.0).segments.boundaries
         
 else:
         assert args.fixedN
@@ -130,12 +140,24 @@ if args.gof is not None:
 else:
         gof = []
         
-# TODO THIS DOESNT MAKE SENCE: TRUETHETA MIGHT NOT BE DEFINED BY THE MODEL SO ITS MEANINGLESS; ALSO NOT SCALED PROPERLY
+# read true parameters (for simulated data only, obviously)
+# we'll use this to calculate the likelihood of the observations under the true parameters
 if args.trueHist is None:
         trueTheta = None
 else:
-        trueTheta = readHist(args.trueHist)
-        trueTheta = trueTheta.scale(1.0/trueTheta.r, calcHmm=False)
+        # read and scale true history
+        assert len(args.trueHist) == 1
+        trueTheta = readHist(args.trueHist[0])
+        trueTheta = trueTheta.scale(scale, 1.0)
+        
+        # adjust trueTheta to the assumed boundaries (this may alter the true parameters)
+        # TODO what to do when bounds undefined?
+        assert bounds is not None
+        r = trueTheta.r
+        lmb = [trueTheta.lmb(t) for t in bounds[:-1]]
+        u = [trueTheta.u(t) for t in bounds[:-1]]
+        trueTheta = Theta(bounds, lmb, u, r)
+        
 model.run(observations, args.iter, trueTheta = trueTheta)
 
 # TODO direct stderr and stdout also to files???        

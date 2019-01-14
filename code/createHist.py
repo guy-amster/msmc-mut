@@ -69,4 +69,4 @@ for f in flags + [('u', np.inf, 0.0)]:
 boundaries.append(np.inf)
     
 # print history:
-args.o.write(str(Theta(boundaries, [.5/x for x in Ns], us, r, calcHmm=False)))
+args.o.write(str(Theta(boundaries, [.5/x for x in Ns], us, r)))

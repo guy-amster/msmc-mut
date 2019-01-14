@@ -17,7 +17,7 @@ class Model(BaumWelch):
     # uPattern   : same for mutation rate (e.g. [0,0,...,0] assumes fixed mutation rate; [0,1,2,...] assumes independent mutation rates)
     # scale      : either '2N0', 'u0' or 'r'. Sets the unit by which results are scaled (e.g. 'u0' sets u0 to 1.0).
     #              (Note you can scale by any parameter; e.g. uPattern = [1,0,2,...] and scaleBy = 'u0' would scale by the mutation rate in the second interval)
-    # TODO remove or doc boundaries
+    # TODO remove or doc boundaries; change 'scale' to 'scaleUnit' or whatever I'm using in Theta.scale(); '2N0' is confusing - use lmb0
     def __init__(self, lmbPattern, uPattern, scale, fixedBoundaries = None):
         
         # verify that exactly one is set to true
@@ -31,9 +31,9 @@ class Model(BaumWelch):
             for i in xrange(len(set(pattern))):
                 assert i in pattern
         
-        self._scale      = scale
-        self._lmbPattern = lmbPattern
-        self._uPattern   = uPattern
+        self.scale            = scale
+        self._lmbPattern      = lmbPattern
+        self._uPattern        = uPattern
         self._fixedBoundaries = fixedBoundaries
         BaumWelch.__init__(self, nStates, 2)
         
@@ -140,7 +140,7 @@ class Model(BaumWelch):
         template = '\t{0:<24}{1}\n'
         res  = template.format('lmbPattern:', self._lmbPattern)
         res += template.format('uPattern:', self._uPattern)
-        res += template.format('scale:', self._scale)
+        res += template.format('scale:', self.scale)
         # TODO update with other __init__ inputs
         return res
     
@@ -178,7 +178,7 @@ class Model(BaumWelch):
         
         # determine u, r, lmb in scaled units
         # (we assume r=u, and notice pi = 4Nu = 2u/lmb)
-        if self._scale == '2N0':
+        if self.scale == '2N0':
             u, r, lmb = pi/2, pi/2, 1.0
         else:
             u, r, lmb = 1.0, 1.0, 2/pi
@@ -200,9 +200,9 @@ class Model(BaumWelch):
         vec = np.exp(vec)
         
         # extract free parameters and add constant scale parameter
-        uVec   = np.append([1.0][:self._scale == 'u0' ], vec[:self._nFreeParamsU])
-        lmbVec = np.append([1.0][:self._scale == '2N0'], vec[self._nFreeParamsU:self._nFreeParamsU+self._nFreeParamsLmb])
-        r      = np.append([1.0][:self._scale == 'r'  ], vec[self._nFreeParamsU+self._nFreeParamsLmb:])[0]
+        uVec   = np.append([1.0][:self.scale == 'u0' ], vec[:self._nFreeParamsU])
+        lmbVec = np.append([1.0][:self.scale == '2N0'], vec[self._nFreeParamsU:self._nFreeParamsU+self._nFreeParamsLmb])
+        r      = np.append([1.0][:self.scale == 'r'  ], vec[self._nFreeParamsU+self._nFreeParamsLmb:])[0]
         
         # calculate values based on patterns
         uVals   = [  uVec[self.  _uPattern[i]] for i in xrange(self.nStates)]
@@ -226,9 +226,9 @@ class Model(BaumWelch):
     def _thetaToVec(self, theta):
         
         # 'shrink' vectors based on patterns, also removing the scale parameter
-        u   = [theta.uVals  [self._uInvPattern  [i]] for i in xrange(self._scale == 'u0' , self._nParamsU      )]
-        lmb = [theta.lmbVals[self._lmbInvPattern[i]] for i in xrange(self._scale == '2N0', self._nParamsLmb    )]
-        r   = [theta.r][self._scale == 'r' :]
+        u   = [theta.uVals  [self._uInvPattern  [i]] for i in xrange(self.scale == 'u0' , self._nParamsU      )]
+        lmb = [theta.lmbVals[self._lmbInvPattern[i]] for i in xrange(self.scale == '2N0', self._nParamsLmb    )]
+        r   = [theta.r][self.scale == 'r' :]
         
         # concatenate values
         vec = np.append(u, np.append(lmb ,r))

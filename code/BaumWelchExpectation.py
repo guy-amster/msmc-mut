@@ -1,5 +1,7 @@
 import numpy as np
 from scipy import linalg as LA
+import time
+from Parallel import writeOutput
 
 # This container class stores the results of the forward-backward algorithm.
 # It contains summary statistics (NOT entire sequence) on the inferred hidden-state sequence.
@@ -74,8 +76,13 @@ class BaumWelchExpectation(object):
         
         assert self._run == False
         
+        start = time.time()
         self._runForward()
+        writeOutput('BWE FORWARD : %f seconds'%(time.time()-start), filename ='DBG')
+        
+        start = time.time()
         self._runBackwards()
+        writeOutput('BWE BACKWARD : %f seconds'%(time.time()-start), filename ='DBG')
         
         self._run = True
         
@@ -91,7 +98,9 @@ class BaumWelchExpectation(object):
         #       1. O_(t+1) = ... = O_(t+d-1) = 0;  and
         #       2. O_(t+d) = j.
         # (Where C is a scaling constant; scalingFactors[j,d-1] = log(C))
+        start = time.time()
         mats, scalingFactors = self._calcForwardMats()
+        writeOutput('BWE FORWARD PREPROCESSING : %f seconds'%(time.time()-start), filename ='DBG')
             
         # initilize ndarray for forward variables
         # forward variables are calculated & stored for the positions in self._obs.positions
@@ -130,7 +139,9 @@ class BaumWelchExpectation(object):
         #       1. O_(t+1) = ... = O_(t+d-1) = 0;  and
         #       2. O_(t+d) = j.
         # (Where C is an arbitrary scaling constant)
+        start = time.time()
         mats = self._calcBackwardMats()
+        writeOutput('BWE BACKWARD PREPROCESSING : %f seconds'%(time.time()-start), filename ='DBG')
         
         # initialize beta_(L-1) (beta_(L-1) (i) = 1.0 )
         beta = np.ones( self._nStates, dtype=np.float64 )
@@ -168,6 +179,7 @@ class BaumWelchExpectation(object):
             beta /= np.sum(beta)
         
         # initialize result arrays
+        start = time.time()
         resTransitions = np.zeros( (self._nStates, self._nStates   ), dtype=np.float64 )
         resEmissions   = np.zeros( (self._nStates, self._nEmissions), dtype=np.float64 )
         
@@ -234,6 +246,9 @@ class BaumWelchExpectation(object):
                 resTransitions += windowH[0, d-1, :, :]
         
         self._res = HiddenSeqSummary(self._obs.length, resTransitions, resEmissions, gammaZero, self._logLikelihood)
+        
+        writeOutput('BWE POSTPROCESSING : %f seconds'%(time.time()-start), filename ='DBG')
+
     
     # calc forward auxiliary mats
     def _calcForwardMats(self):
@@ -254,7 +269,7 @@ class BaumWelchExpectation(object):
             scales[outputType, 0]      = np.log(s)
         
         # for blocks larger than 1, compute matrices recursively
-        # if the last output is 0, notice mats[0,d-1] = mats[0,0] ^ d
+        # if the last output is 0, notice mats[0,d-1] = mats[0,0] ^ d (scaled to L1 norm of 1)
         self._powerArray(mats[0, :, :, :], scales[0,:])
         # otherwise, mats[type,d-1] = mats[type,0] * mats[0,d-2]
         for outputType in xrange(1,self._nEmissions):
